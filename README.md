@@ -1,5 +1,7 @@
 # PayDayLoan
 
+[![Build Status](https://travis-ci.org/simplifi/pay_day_loan.svg?branch=master)](https://travis-ci.org/simplifi/pay_day_loan)
+
 Fast cache now!
 
 This project provides a framework for building on-demand caching in Elixir. 
