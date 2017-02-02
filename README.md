@@ -1,6 +1,7 @@
 # PayDayLoan
 
 [![Build Status](https://travis-ci.org/simplifi/pay_day_loan.svg?branch=master)](https://travis-ci.org/simplifi/pay_day_loan)
+[![Coverage Status](https://coveralls.io/repos/github/simplifi/pay_day_loan/badge.svg)](https://coveralls.io/github/simplifi/pay_day_loan)
 [![Hex.pm version](https://img.shields.io/hexpm/v/pay_day_loan.svg?style=flat-square)](https://hex.pm/packages/pay_day_loan)
 [![Hex.pm downloads](https://img.shields.io/hexpm/dt/pay_day_loan.svg?style=flat-square)](https://hex.pm/packages/pay_day_loan)
 [![License](https://img.shields.io/hexpm/l/pay_day_loan.svg?style=flat-square)](https://hex.pm/packages/pay_day_loan)
