@@ -30,6 +30,7 @@ defmodule PayDayLoan.CacheStateManager do
 
   # this should get called by the supervisor during startup
   @doc false
+  @spec create_table(atom) :: :ok
   def create_table(ets_table_id) do
     _ = :ets.new(
       ets_table_id,

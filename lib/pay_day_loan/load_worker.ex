@@ -65,7 +65,7 @@ defmodule PayDayLoan.LoadWorker do
     load_data = pdl.callback_module.bulk_load(batch_keys)
 
     # add it to the cache
-    #   we need to know which keys did not get handled so that we can  
+    #   we need to know which keys did not get handled so that we can
     #   mark them as failed
     keys_not_loaded = load_data
     |> Enum.reduce(

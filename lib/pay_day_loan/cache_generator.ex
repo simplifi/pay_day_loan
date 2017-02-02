@@ -4,17 +4,16 @@ defmodule PayDayLoan.CacheGenerator do
   @moduledoc false
 
   @doc false
+  @spec compile(Keyword.t) :: Macro.t
   def compile(opts) when is_list(opts) do
     callback_module = opts
     |> Keyword.get(:callback_module)
     |> determine_callback_module
 
-    pdl = %PayDayLoan{callback_module: callback_module}
-
     # build the config struct with defaults overridden by
     # values from opts
     pdl = opts
-    |> merge_opts(pdl)
+    |> merge_opts(%PayDayLoan{callback_module: callback_module})
     |> PayDayLoan.merge_defaults
 
     quoted_pdl = quoted_struct(pdl)
@@ -158,7 +157,7 @@ defmodule PayDayLoan.CacheGenerator do
     meta = {
       :__aliases__,
       [alias: false],
-      Module.split(struct_module) |> Enum.map(&String.to_atom/1)
+      Enum.map(Module.split(struct_module), &String.to_atom/1)
     }
     new_kv = struct |> Map.from_struct |> Enum.into([])
     {:%, [], [meta, {:%{}, [], new_kv}]}

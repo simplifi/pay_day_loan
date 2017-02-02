@@ -3,7 +3,7 @@ defmodule PayDayLoan.Mixfile do
 
   def project do
     [app: :pay_day_loan,
-     version: "0.1.0",
+     version: "0.2.0",
      description: description,
      package: package,
      elixir: "~> 1.1",
@@ -42,7 +42,7 @@ defmodule PayDayLoan.Mixfile do
       {:ex_doc, "~> 0.7", only: :dev},
       {:dialyze, "~>0.2", only: :dev},
       {:coverex, "~> 1.4.9", only: :test},
-      {:credo, "~> 0.3", only: [:dev, :test]}
+      {:credo, "~> 0.6.1", only: [:dev]}
     ]
   end
 end
