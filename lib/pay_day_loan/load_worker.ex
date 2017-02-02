@@ -10,6 +10,8 @@ defmodule PayDayLoan.LoadWorker do
   ping manually, call `GenServer.cast(pdl.load_worker, :ping)`.
   """
 
+  require Logger
+
   alias PayDayLoan.LoadState
   alias PayDayLoan.CacheStateManager
   alias PayDayLoan.KeyCache
@@ -63,11 +65,28 @@ defmodule PayDayLoan.LoadWorker do
     load_data = pdl.callback_module.bulk_load(batch_keys)
 
     # add it to the cache
-    Enum.each(load_data, fn({key, load_datum}) ->
-      pdl
-      |> load_element(key, load_datum)
-      |> on_load_or_refresh(pdl, key)
-    end)
+    #   we need to know which keys did not get handled so that we can  
+    #   mark them as failed
+    keys_not_loaded = load_data
+    |> Enum.reduce(
+      MapSet.new(batch_keys),
+      fn({key, load_datum}, keys_remaining) ->
+        # load
+        pdl
+        |> load_element(key, load_datum)
+        |> on_load_or_refresh(pdl, key)
+
+        # remove from the set of loading keys
+        MapSet.delete(keys_remaining, key)
+      end
+    )
+
+    # mark these keys as failed because we requested them and they did not
+    #    get loaded into cache (e.g., the bulk load query did not return data)
+    Enum.each(
+      keys_not_loaded,
+      fn(key) -> LoadState.failed(pdl.load_state_manager, key) end
+    )
   end
 
   # either create a new element or update the existing one

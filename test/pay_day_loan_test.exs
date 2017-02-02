@@ -238,9 +238,11 @@ defmodule PayDayLoanTest do
 
     key = PDLTestImplementation.key_that_shall_not_be_loaded
 
-    assert {:error, :timed_out} == PDLTestCache.get_pid(key)
+    assert {:error, :failed} == PDLTestCache.get_pid(key)
     assert [{:loaded, [key]}] == LoadHistory.loads
-    refute PDL.KeyCache.in_cache?(pdl.key_cache, key)
+    assert nil == PDL.LoadState.peek(pdl.load_state_manager, key)
+    # we hold onto the knowledge that the key exists
+    assert PDL.KeyCache.in_cache?(pdl.key_cache, key)
   end
 
   test "requesting a key that does not exist" do

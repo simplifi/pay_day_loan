@@ -140,7 +140,7 @@ defmodule PayDayLoan.CacheStateManager do
       %{},
       fn(pid, acc) ->
         if Process.alive?(pid) do
-          acc = ensure_monitored(acc, pid)
+          ensure_monitored(acc, pid)
         else
           delete_pid(pdl.cache_state_manager, pid)
         end
