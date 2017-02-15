@@ -33,16 +33,19 @@ defmodule PayDayLoan.LoadWorker do
     GenServer.start(__MODULE__, [init_state], gen_server_opts)
   end
 
+  @spec init([PayDayLoan.t]) :: {:ok, PayDayLoan.t}
   def init([pdl]) do
-    Process.send_after(self, :ping, @startup_dwell)
+    Process.send_after(self(), :ping, @startup_dwell)
     {:ok, pdl}
   end
 
+  @spec handle_cast(atom, PayDayLoan.t) :: {:noreply, PayDayLoan.t}
   def handle_cast(:ping, pdl) do
     :ok = do_load(pdl, LoadState.any_requested?(pdl.load_state_manager))
     {:noreply, pdl}
   end
 
+  @spec handle_info(atom, PayDayLoan.t) :: {:noreply, PayDayLoan.t}
   def handle_info(:ping, pdl) do
     :ok = do_load(pdl, LoadState.any_requested?(pdl.load_state_manager))
     {:noreply, pdl}

@@ -18,6 +18,7 @@ defmodule PayDayLoan.CacheStateManager do
     @moduledoc false
 
     defstruct(pdl: nil, monitors: %{})
+    @type t :: %__MODULE__{}
   end
   alias PayDayLoan.CacheStateManager.State
 
@@ -132,7 +133,7 @@ defmodule PayDayLoan.CacheStateManager do
 
   ######################################################################
   # Monitor GenServer callbacks
-  @doc false
+  @spec init([PayDayLoan.t]) :: {:ok, State.t}
   def init([pdl]) do
     # monitor all existing pids, clean up if they have died
     #   (could happen when this process restarts)
@@ -151,13 +152,14 @@ defmodule PayDayLoan.CacheStateManager do
     {:ok, %State{pdl: pdl, monitors: monitors}}
   end
 
-  @doc false
+  @spec handle_cast({:monitor, pid}, State.t) :: {:noreply, State.t}
   def handle_cast({:monitor, pid}, state) do
     monitors = ensure_monitored(state.monitors, pid)
     {:noreply, %{state | monitors: monitors}}
   end
 
-  @doc false
+  @spec handle_info({:DOWN, term, :process, pid, term}, State.t)
+  :: {:noreply, State.t}
   def handle_info({:DOWN, _, :process, pid, _}, state) do
     delete_pid(state.pdl.cache_state_manager, pid)
     monitors = remove_monitor(state.monitors, pid)

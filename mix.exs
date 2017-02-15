@@ -3,9 +3,9 @@ defmodule PayDayLoan.Mixfile do
 
   def project do
     [app: :pay_day_loan,
-     version: "0.2.0",
-     description: description,
-     package: package,
+     version: "0.2.1",
+     description: description(),
+     package: package(),
      elixir: "~> 1.3",
      build_embedded: Mix.env == :prod,
      start_permanent: Mix.env == :prod,
@@ -18,7 +18,7 @@ defmodule PayDayLoan.Mixfile do
      ],
      elixirc_paths: elixirc_paths(Mix.env),
      docs: [main: "PayDayLoan"],
-     deps: deps]
+     deps: deps()]
   end
 
   def application do
@@ -45,9 +45,9 @@ defmodule PayDayLoan.Mixfile do
 
   defp deps do
     [
-      {:ex_doc, "~> 0.7", only: :dev},
+      {:ex_doc, "~> 0.14", only: :dev},
       {:dialyxir, "~>0.4", only: :dev, runtime: false},
-      {:excoveralls, "~> 0.5", only: :test},
+      {:excoveralls, "~> 0.6", only: :test},
       {:credo, "~> 0.6.1", only: [:dev]}
     ]
   end

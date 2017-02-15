@@ -20,7 +20,7 @@ defmodule PayDayLoan.CacheGenerator do
 
     [
       generate_pdl(quoted_pdl),
-      generate_shortcuts
+      generate_shortcuts()
     ]
   end
 
@@ -56,7 +56,7 @@ defmodule PayDayLoan.CacheGenerator do
       @spec get_pid(key :: PayDayLoan.key) ::
       {:ok, pid} | {:error, PayDayLoan.error}
       def get_pid(key) do
-        PayDayLoan.get_pid(pdl, key)
+        PayDayLoan.get_pid(pdl(), key)
       end
 
       @doc """
@@ -66,7 +66,7 @@ defmodule PayDayLoan.CacheGenerator do
       """
       @spec size :: non_neg_integer
       def size do
-        PayDayLoan.cache_size(pdl)
+        PayDayLoan.cache_size(pdl())
       end
 
       @doc """
@@ -76,7 +76,7 @@ defmodule PayDayLoan.CacheGenerator do
       """
       @spec request_load(PayDayLoan.key | [PayDayLoan.key]) :: :ok
       def request_load(key_or_keys) do
-        PayDayLoan.request_load(pdl, key_or_keys)
+        PayDayLoan.request_load(pdl(), key_or_keys)
       end
 
       @doc """
@@ -84,7 +84,7 @@ defmodule PayDayLoan.CacheGenerator do
       """
       @spec keys :: [PayDayLoan.key]
       def keys do
-        PayDayLoan.keys(pdl)
+        PayDayLoan.keys(pdl())
       end
 
       @doc """
@@ -92,7 +92,7 @@ defmodule PayDayLoan.CacheGenerator do
       """
       @spec pids :: [pid]
       def pids do
-        PayDayLoan.pids(pdl)
+        PayDayLoan.pids(pdl())
       end
 
       @doc """
@@ -101,7 +101,7 @@ defmodule PayDayLoan.CacheGenerator do
       @spec reduce(term, (({PayDayLoan.key, pid}, term) -> term)) :: term
       def reduce(acc0, reducer)
       when is_function(reducer, 2) do
-        PayDayLoan.reduce(pdl, acc0, reducer)
+        PayDayLoan.reduce(pdl(), acc0, reducer)
       end
 
       @doc """
@@ -120,7 +120,7 @@ defmodule PayDayLoan.CacheGenerator do
             found_callback,
             not_found_callback \\ fn -> {:error, :not_found} end
           ) do
-        PayDayLoan.with_pid(pdl, key, found_callback, not_found_callback)
+        PayDayLoan.with_pid(pdl(), key, found_callback, not_found_callback)
       end
 
       @doc """
@@ -129,7 +129,7 @@ defmodule PayDayLoan.CacheGenerator do
       """
       @spec cache(PayDayLoan.key, pid) :: :ok | {:error, pid}
       def cache(key, pid) do
-        PayDayLoan.cache(pdl, key, pid)
+        PayDayLoan.cache(pdl(), key, pid)
       end
     end
   end

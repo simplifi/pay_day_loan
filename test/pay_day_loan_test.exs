@@ -75,7 +75,7 @@ defmodule PayDayLoanTest do
 
       keys = keys
       |> Enum.filter(fn(k) ->
-        k != key_that_shall_not_be_loaded
+        k != key_that_shall_not_be_loaded()
       end)
 
       Enum.map(keys, fn(key) -> {key, key} end)

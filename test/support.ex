@@ -30,22 +30,22 @@ defmodule PayDayLoanTest.Support do
     end
 
     def bulk_loads do
-      get
+      get()
       |> Enum.filter(&is_bulk_load?/1)
     end
 
     def loads do
-      get
+      get()
       |> Enum.filter(&is_load?/1)
     end
 
     def news do
-      get
+      get()
       |> Enum.filter(&is_new?/1)
     end
 
     def refreshes do
-      get
+      get()
       |> Enum.filter(&is_refresh?/1)
     end
 
