@@ -1,4 +1,4 @@
-defmodule PayDayLoanTest do
+defmodule ProcessCacheTest do
   use ExUnit.Case
 
   alias PayDayLoan, as: PDL
@@ -14,19 +14,19 @@ defmodule PayDayLoanTest do
   alias PayDayLoanTest.Support.LoadHistory
 
   # our cache for testing
-  defmodule PDLTestCache do
+  defmodule PDLTestProcessCache do
     # we override batch_size here so we can test overrides -
     #   this is not necessary in general use
     use(
       PayDayLoan,
       batch_size: 10,
       load_wait_msec: 50,
-      callback_module: PayDayLoanTest.PDLTestImplementation
+      callback_module: ProcessCacheTest.PDLTestProcessImplementation
     )
   end
 
   # loader behaviour implementation
-  defmodule PDLTestImplementation do
+  defmodule PDLTestProcessImplementation do
     @behaviour PayDayLoan.Loader
 
     @key_that_shall_be_replaced "key that shall be replaced" 
@@ -130,7 +130,7 @@ defmodule PayDayLoanTest do
 
     wait_for(fn -> Process.whereis(PDLTestSup) == nil end)
 
-    pdl = PDLTestCache.pdl
+    pdl = PDLTestProcessCache.pdl
     sup_spec = PayDayLoan.supervisor_specification(pdl)
 
     {:ok, _sup_pid} = Supervisor.start_link(
@@ -147,7 +147,7 @@ defmodule PayDayLoanTest do
   end
 
   test "basic integration test" do
-    pdl = PDLTestCache.pdl
+    pdl = PDLTestProcessCache.pdl
 
     assert 0 == PDL.CacheStateManager.size(pdl.cache_state_manager)
 
@@ -157,7 +157,7 @@ defmodule PayDayLoanTest do
 
     GenServer.cast(pdl.load_worker, :ping)
 
-    {:ok, pid} = PDLTestCache.get_pid(1)
+    {:ok, pid} = PDLTestProcessCache.get_pid(1)
 
     assert :loaded == PDL.query_load_state(pdl, 1)
 
@@ -169,19 +169,19 @@ defmodule PayDayLoanTest do
   end
 
   test "loading happens in bulk" do
-    pdl = PDLTestCache.pdl
+    pdl = PDLTestProcessCache.pdl
 
     n = 10
 
     tasks = (1..n)
     |> Enum.map(fn(ix) ->
       Task.async(fn ->
-        {:ok, _pid} = PDLTestCache.get_pid(ix)
+        {:ok, _pid} = PDLTestProcessCache.get_pid(ix)
       end)
     end)
 
     Enum.each(tasks, fn(task) -> Task.await(task) end)
-    assert n == PDLTestCache.size
+    assert n == PDLTestProcessCache.size
 
     assert length(LoadHistory.bulk_loads) > 0
     assert n == length(LoadHistory.news)
@@ -194,11 +194,11 @@ defmodule PayDayLoanTest do
   end
 
   test "refreshing a cache element" do
-    pdl = PDLTestCache.pdl
-    replaced_key = PDLTestImplementation.key_that_shall_be_replaced
+    pdl = PDLTestProcessCache.pdl
+    replaced_key = PDLTestProcessImplementation.key_that_shall_be_replaced
 
-    {:ok, pid1} = PDLTestCache.get_pid(1)
-    {:ok, pid2} = PDLTestCache.get_pid(replaced_key)
+    {:ok, pid1} = PDLTestProcessCache.get_pid(1)
+    {:ok, pid2} = PDLTestProcessCache.get_pid(replaced_key)
 
     news = LoadHistory.news
     assert 2 == length(news)
@@ -208,7 +208,7 @@ defmodule PayDayLoanTest do
     assert [{1, 1}] == Agent.get(pid1, &(&1))
     assert [{replaced_key, replaced_key}] == Agent.get(pid2, &(&1))
 
-    PDLTestCache.request_load([1, replaced_key])
+    PDLTestProcessCache.request_load([1, replaced_key])
 
     wait_for(
       fn ->
@@ -216,10 +216,10 @@ defmodule PayDayLoanTest do
       end
     )
 
-    assert {:ok, pid1} == PDLTestCache.get_pid(1)
+    assert {:ok, pid1} == PDLTestProcessCache.get_pid(1)
     assert [{1, 1}, {1, 1}] == Agent.get(pid1, &(&1))
 
-    {:ok, pid2_new} = PDLTestCache.get_pid(replaced_key)
+    {:ok, pid2_new} = PDLTestProcessCache.get_pid(replaced_key)
     assert pid2_new != pid2
     assert [{replaced_key, replaced_key}] == Agent.get(pid2_new, &(&1))
 
@@ -234,11 +234,11 @@ defmodule PayDayLoanTest do
 
   test "requesting a key that is in key cache but fails to load" do
     # reduce the load wait time to make the test go by faster
-    pdl = %{ PDLTestCache.pdl | load_wait_msec: 10 }
+    pdl = %{ PDLTestProcessCache.pdl | load_wait_msec: 10 }
 
-    key = PDLTestImplementation.key_that_shall_not_be_loaded
+    key = PDLTestProcessImplementation.key_that_shall_not_be_loaded
 
-    assert {:error, :failed} == PDLTestCache.get_pid(key)
+    assert {:error, :failed} == PDLTestProcessCache.get_pid(key)
     assert [{:loaded, [key]}] == LoadHistory.loads
     assert nil == PDL.LoadState.peek(pdl.load_state_manager, key)
     # we hold onto the knowledge that the key exists
@@ -246,52 +246,52 @@ defmodule PayDayLoanTest do
   end
 
   test "requesting a key that does not exist" do
-    pdl = PDLTestCache.pdl
+    pdl = PDLTestProcessCache.pdl
 
-    key = PDLTestImplementation.key_that_does_not_exist
+    key = PDLTestProcessImplementation.key_that_does_not_exist
 
-    assert {:error, :not_found} == PDLTestCache.get_pid(key)
+    assert {:error, :not_found} == PDLTestProcessCache.get_pid(key)
     assert [] == LoadHistory.loads
     refute PDL.KeyCache.in_cache?(pdl.key_cache, key)
   end
 
   test "overriding defaults" do
-    assert 10 == PDLTestCache.pdl.batch_size
+    assert 10 == PDLTestProcessCache.pdl.batch_size
   end
 
   test "large batches don't require an extra ping" do
-    batch_size = PDLTestCache.pdl.batch_size
+    batch_size = PDLTestProcessCache.pdl.batch_size
     keys = Enum.to_list(1..(2 * batch_size))
 
-    PDLTestCache.request_load(keys)
+    PDLTestProcessCache.request_load(keys)
 
-    wait_for(fn -> length(keys) == PDLTestCache.size end)
+    wait_for(fn -> length(keys) == PDLTestProcessCache.size end)
 
-    assert length(keys) == PDLTestCache.size
+    assert length(keys) == PDLTestProcessCache.size
   end
 
   test "load failures are ignored (should be handled in callback)" do
-    key = PDLTestImplementation.key_that_will_not_new
-    assert {:error, :failed} == PDLTestCache.get_pid(key)
+    key = PDLTestProcessImplementation.key_that_will_not_new
+    assert {:error, :failed} == PDLTestProcessCache.get_pid(key)
     # should get cleared from the load state cache
-    assert nil == PDL.peek_load_state(PDLTestCache.pdl, key)
+    assert nil == PDL.peek_load_state(PDLTestProcessCache.pdl, key)
   end
 
   test "refresh failures are ignored (should be handled in callback)" do
-    key = PDLTestImplementation.key_that_will_not_refresh
+    key = PDLTestProcessImplementation.key_that_will_not_refresh
 
     # it should load
-    {:ok, pid} = PDLTestCache.get_pid(key)
+    {:ok, pid} = PDLTestProcessCache.get_pid(key)
 
-    PDLTestCache.request_load(key)
+    PDLTestProcessCache.request_load(key)
 
     # the refresh fixture will kill the existing pid
     wait_for(fn -> !Process.alive?(pid) end)
 
     # fail to refresh
-    assert {:error, :failed} == PDLTestCache.get_pid(key)
+    assert {:error, :failed} == PDLTestProcessCache.get_pid(key)
     # should get cleared from the load state cache
-    assert nil == PDL.peek_load_state(PDLTestCache.pdl, key)
+    assert nil == PDL.peek_load_state(PDLTestProcessCache.pdl, key)
   end
 
   test "working with key/pid lists" do
@@ -300,53 +300,53 @@ defmodule PayDayLoanTest do
     tasks = (1..n)
     |> Enum.map(fn(ix) ->
       Task.async(fn ->
-        {:ok, _pid} = PDLTestCache.get_pid(ix)
+        {:ok, _pid} = PDLTestProcessCache.get_pid(ix)
       end)
     end)
 
     Enum.each(tasks, fn(task) -> Task.await(task) end)
-    assert n == PDLTestCache.size
+    assert n == PDLTestProcessCache.size
 
     expect_keys = Enum.to_list(1..n)
     expect_pids = Enum.map(
       expect_keys,
-      fn(key) -> {:ok, pid} = PDLTestCache.get_pid(key); pid end
+      fn(key) -> {:ok, pid} = PDLTestProcessCache.get_pid(key); pid end
     )
 
-    assert MapSet.new(expect_keys) == MapSet.new(PDLTestCache.keys)
-    assert MapSet.new(expect_pids) == MapSet.new(PDLTestCache.pids)
+    assert MapSet.new(expect_keys) == MapSet.new(PDLTestProcessCache.keys)
+    assert MapSet.new(expect_pids) == MapSet.new(PDLTestProcessCache.pids)
 
     expect_map = Enum.reduce(expect_keys, %{},
       fn(k, acc) ->
-        {:ok, pid} = PDLTestCache.get_pid(k)
+        {:ok, pid} = PDLTestProcessCache.get_pid(k)
         Map.put(acc, k, pid)
       end)
     
-    got_map = PDLTestCache.reduce(%{},
+    got_map = PDLTestProcessCache.reduce(%{},
       fn({k, pid}, acc) -> Map.put(acc, k, pid) end)
 
     assert expect_map == got_map
   end
 
   test "when a pid is killed, it is unloaded and can be reloaded" do
-    {:ok, pid1} = PDLTestCache.get_pid(1)
+    {:ok, pid1} = PDLTestProcessCache.get_pid(1)
 
     assert Process.alive?(pid1)
 
     Agent.stop(pid1)
 
-    assert {:error, :not_found} == PDL.peek_pid(PDLTestCache.pdl, 1)
+    assert {:error, :not_found} == PDL.peek_pid(PDLTestProcessCache.pdl, 1)
 
-    {:ok, pid2} = PDLTestCache.get_pid(1)
+    {:ok, pid2} = PDLTestProcessCache.get_pid(1)
 
     assert Process.alive?(pid2)
     refute pid1 == pid2
   end
 
   test "when the monitor is killed, it restarts and starts monitoring again" do
-    pdl = PDLTestCache.pdl
+    pdl = PDLTestProcessCache.pdl
 
-    {:ok, pid1} = PDLTestCache.get_pid(1)
+    {:ok, pid1} = PDLTestProcessCache.get_pid(1)
 
     previous_pid = Process.whereis(pdl.cache_state_manager)
 
@@ -364,62 +364,62 @@ defmodule PayDayLoanTest do
     Agent.stop(pid1)
 
     # so when we stop that pid, it should be removed from cache
-    wait_for(fn -> [] == PDLTestCache.keys end)
+    wait_for(fn -> [] == PDLTestProcessCache.keys end)
   end
 
   test "manually adding an element to the cache" do
     {:ok, pid} = Agent.start(fn -> 1 end)
 
-    PDLTestCache.cache(1, pid)
+    PDLTestProcessCache.cache(1, pid)
 
-    assert [1] == PDLTestCache.keys
-    assert [pid] == PDLTestCache.pids
+    assert [1] == PDLTestProcessCache.keys
+    assert [pid] == PDLTestProcessCache.pids
 
     # make sure it's monitored and gets removed on death
     Agent.stop(pid)
-    wait_for(fn -> [] == PDLTestCache.keys end)
+    wait_for(fn -> [] == PDLTestProcessCache.keys end)
   end
 
   test "manually removing an element from the cache" do
-    {:ok, pid} = PDLTestCache.get_pid(1)
+    {:ok, pid} = PDLTestProcessCache.get_pid(1)
 
-    assert {:ok, pid} == PDLTestCache.get_pid(1)
+    assert {:ok, pid} == PDLTestProcessCache.get_pid(1)
 
-    :ok = PayDayLoan.uncache_key(PDLTestCache.pdl, 1)
+    :ok = PayDayLoan.uncache_key(PDLTestProcessCache.pdl, 1)
 
-    assert [] == PDLTestCache.keys
-    assert [] == PDLTestCache.pids
+    assert [] == PDLTestProcessCache.keys
+    assert [] == PDLTestProcessCache.pids
 
     assert Process.alive?(pid)
 
     Agent.stop(pid)
 
-    {:ok, pid2} = PDLTestCache.get_pid(1)
+    {:ok, pid2} = PDLTestProcessCache.get_pid(1)
     refute pid == pid2
   end
 
   test "when new returns :ignore" do
-    key = PDLTestImplementation.key_that_returns_ignore_on_new
-    assert {:error, :failed} == PDLTestCache.get_pid(key)
+    key = PDLTestProcessImplementation.key_that_returns_ignore_on_new
+    assert {:error, :failed} == PDLTestProcessCache.get_pid(key)
     # should get cleared from the load state cache
-    assert nil == PDL.peek_load_state(PDLTestCache.pdl, key)
+    assert nil == PDL.peek_load_state(PDLTestProcessCache.pdl, key)
   end
 
   test "refresh :ignore failures are ignored (should be handled in callback)" do
-    key = PDLTestImplementation.key_that_returns_ignore_on_refresh
+    key = PDLTestProcessImplementation.key_that_returns_ignore_on_refresh
 
     # it should load
-    {:ok, pid} = PDLTestCache.get_pid(key)
+    {:ok, pid} = PDLTestProcessCache.get_pid(key)
 
-    PDLTestCache.request_load(key)
+    PDLTestProcessCache.request_load(key)
 
     # the refresh fixture will kill the existing pid
     wait_for(fn -> !Process.alive?(pid) end)
 
     # fail to refresh
-    assert {:error, :failed} == PDLTestCache.get_pid(key)
+    assert {:error, :failed} == PDLTestProcessCache.get_pid(key)
     # should get cleared from the load state cache
-    assert nil == PDL.peek_load_state(PDLTestCache.pdl, key)
+    assert nil == PDL.peek_load_state(PDLTestProcessCache.pdl, key)
   end
 
   test "callback_module is a required option for `use PayDayLoan`" do

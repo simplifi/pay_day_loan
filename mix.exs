@@ -45,8 +45,8 @@ defmodule PayDayLoan.Mixfile do
 
   defp deps do
     [
-      {:ex_doc, "~> 0.14", only: :dev},
-      {:dialyxir, "~>0.4", only: :dev, runtime: false},
+      {:ex_doc, "~> 0.15.0", only: :dev},
+      {:dialyxir, "~>0.5", only: :dev, runtime: false},
       {:excoveralls, "~> 0.6", only: :test},
       {:credo, "~> 0.6.1", only: [:dev]}
     ]
