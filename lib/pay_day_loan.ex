@@ -189,6 +189,10 @@ defmodule PayDayLoan do
     CacheStateManager.get_pid(pdl.cache_state_manager, key)
   end
 
+  def peek(pdl = %PayDayLoan{}, key) do
+    CacheStateManager.get(pdl.cache_state_manager, key)
+  end
+
   @doc """
   Check load state, but do not request a load
   """
@@ -229,6 +233,10 @@ defmodule PayDayLoan do
     get_pid(pdl, key, peek_load_state(pdl, key), pdl.load_num_tries)
   end
 
+  def get(pdl = %PayDayLoan{}, key) do
+    get(pdl, key, peek_load_state(pdl, key), pdl.load_num_tries)
+  end
+
   @doc """
   Returns the number of keys in the given cache
   """
@@ -251,6 +259,10 @@ defmodule PayDayLoan do
   @spec pids(pdl :: t) :: [pid]
   def pids(pdl = %PayDayLoan{}) do
     CacheStateManager.all_pids(pdl.cache_state_manager)
+  end
+
+  def values(pdl = %PayDayLoan{}) do
+    CacheStateManager.all_values(pdl.cache_state_manager)
   end
 
   @doc """
@@ -289,12 +301,19 @@ defmodule PayDayLoan do
     end
   end
 
+  def with_value(pdl, key, found_callback, not_found_callback \\ fn -> {:error, :not_found} end) do
+    case peek(pdl, key) do
+      {:ok, value} -> found_callback.(value)
+      {:error, :not_found} -> not_found_callback.()
+    end
+  end
+
   @doc """
   Manually add a single key/pid to the cache.  Fails if the key is
   already in cache with a different pid.
   """
   @spec cache(t, key, pid) :: :ok | {:error, pid}
-  def cache(pdl = %PayDayLoan{}, key, pid) do
+  def cache(pdl = %PayDayLoan{}, key, pid) when is_pid(pid) do
     with_pid(
       pdl,
       key,
@@ -309,6 +328,24 @@ defmodule PayDayLoan do
         _ = LoadState.loaded(pdl.load_state_manager, key)
         _ = KeyCache.add_to_cache(pdl.key_cache, key)
         CacheStateManager.put_pid(pdl.cache_state_manager, key, pid)
+      end
+    )
+  end
+  def cache(pdl = %PayDayLoan{}, key, value) do
+    with_value(
+      pdl,
+      key,
+      fn
+        # found with the same value
+        (^value) -> :ok
+        # found with a different pid
+        (other_value) -> {:error, other_value}
+      end,
+      fn() ->
+        # not found
+        _ = LoadState.loaded(pdl.load_state_manager, key)
+        _ = KeyCache.add_to_cache(pdl.key_cache, key)
+        CacheStateManager.put(pdl.cache_state_manager, key, value)
       end
     )
   end
@@ -360,7 +397,7 @@ defmodule PayDayLoan do
   defp nil_merge(_k, _v1, v2), do: v2
 
   ######################################################################
-  # main get_pid implementatino
+  # main get_pid implementation
   #
   # this is the meat of what happens when we request a pid
   #
@@ -422,6 +459,44 @@ defmodule PayDayLoan do
     else
       # if the key doesn't exist in cache source, we can immediately return
       # :not_found
+      {:error, :not_found}
+    end
+  end
+
+  defp get(pdl, key, _load_state, 0) do
+    KeyCache.remove(pdl.key_cache, key)
+    {:error, :timed_out}
+  end
+  defp get(pdl, key, :loaded, try_num) do
+    case CacheStateManager.get(pdl.cache_state_manager, key) do
+      # if the value was removed from the backend, we should remove it from
+      # the load state and try again
+      {:error, :not_found} ->
+        :ok = LoadState.unload(pdl.load_state_manager, key)
+        get(pdl, key, peek_load_state(pdl, key), try_num - 1)
+      {:ok, value} -> {:ok, value}
+    end
+    CacheStateManager.get(pdl.cache_state_manager, key)
+  end
+  defp get(pdl, key, :loading, try_num) do
+    :timer.sleep(pdl.load_wait_msec)
+    get(pdl, key, peek_load_state(pdl, key), try_num - 1)
+  end
+  defp get(pdl, key, :requested, try_num) do
+    GenServer.cast(pdl.load_worker, :ping)
+    get(pdl, key, :loading, try_num)
+  end
+  defp get(pdl, key, :failed, _try_num) do
+    LoadState.unload(pdl.load_state_manager, key)
+    {:error, :failed}
+  end
+  defp get(pdl, key, nil, try_num) do
+    if KeyCache.exist?(pdl.key_cache, pdl.callback_module, key) do
+      request_load(pdl, key)
+      GenServer.cast(pdl.load_worker, :ping)
+      :timer.sleep(pdl.load_wait_msec)
+      get(pdl, key, peek_load_state(pdl, key), try_num - 1)
+    else
       {:error, :not_found}
     end
   end

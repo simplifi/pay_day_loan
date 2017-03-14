@@ -46,7 +46,16 @@ defmodule PayDayLoan.CacheStateManager do
   @spec reduce(atom, term, (({PayDayLoan.key, pid}, term) -> term)) :: term
   def reduce(ets_table_id, acc0, reducer)
   when is_function(reducer, 2) do
-    :ets.foldl(reducer, acc0, ets_table_id)
+    :ets.foldl(
+      fn({k, v}, acc) ->
+        case resolve_value(v, k) do
+          {:ok, resolved_v} -> reducer.({k, resolved_v}, acc)
+          {:error, :not_found} -> acc
+        end
+      end,
+      acc0,
+      ets_table_id
+    )
   end
 
   @doc """
@@ -73,6 +82,10 @@ defmodule PayDayLoan.CacheStateManager do
     reduce(ets_table_id, [], fn({_k, pid}, acc) -> [pid | acc] end)
   end
 
+  def all_values(ets_table_id) do
+    reduce(ets_table_id, [], fn({_k, v}, acc) -> [v | acc] end)
+  end
+
   @doc """
   Get the pid corresponding to the given key
 
@@ -93,6 +106,18 @@ defmodule PayDayLoan.CacheStateManager do
     end
   end
 
+  def get(ets_table_id, key) do
+    case lookup(ets_table_id, key) do
+      {:ok, pre_resolve_value} -> resolve_value(pre_resolve_value, key)
+      {:error, :not_found} -> {:error, :not_found}
+    end
+  end
+
+  defp resolve_value(cb, key) when is_function(cb, 1) do
+    cb.(key)
+  end
+  defp resolve_value(value, _key), do: {:ok, value}
+
   @doc """
   Add a pid to the cache and monitor it.
   """
@@ -100,6 +125,10 @@ defmodule PayDayLoan.CacheStateManager do
   def put_pid(id, key, pid) do
     :ets.insert(id, {key, pid})
     GenServer.cast(id, {:monitor, pid})
+  end
+
+  def put(id, key, value) do
+    :ets.insert(id, {key, value})
   end
 
   @doc """

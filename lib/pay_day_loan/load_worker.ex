@@ -94,11 +94,11 @@ defmodule PayDayLoan.LoadWorker do
 
   # either create a new element or update the existing one
   defp load_element(pdl, key, load_datum) do
-    PayDayLoan.with_pid(
+    PayDayLoan.with_value(
       pdl,
       key,
-      fn(existing_pid) ->
-        pdl.callback_module.refresh(existing_pid, key, load_datum)
+      fn(existing_value) ->
+        pdl.callback_module.refresh(existing_value, key, load_datum)
       end,
       fn() ->
         pdl.callback_module.new(key, load_datum)
@@ -107,13 +107,23 @@ defmodule PayDayLoan.LoadWorker do
   end
 
   # update cache states
-  defp on_load_or_refresh({:ok, updated_pid}, pdl, key) do
+  defp on_load_or_refresh({:ok, updated_pid}, pdl, key)
+  when is_pid(updated_pid) do
     _ = LoadState.loaded(pdl.load_state_manager, key)
     _ = KeyCache.add_to_cache(pdl.key_cache, key)
     CacheStateManager.put_pid(
       pdl.cache_state_manager,
       key,
       updated_pid)
+  end
+  defp on_load_or_refresh({:ok, value}, pdl, key) do
+    _ = LoadState.loaded(pdl.load_state_manager, key)
+    _ = KeyCache.add_to_cache(pdl.key_cache, key)
+    CacheStateManager.put(
+      pdl.cache_state_manager,
+      key,
+      value
+    )
   end
   defp on_load_or_refresh(:ignore, pdl, key) do
     # treat an :ignore the same as a failure to start

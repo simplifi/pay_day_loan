@@ -59,6 +59,10 @@ defmodule PayDayLoan.CacheGenerator do
         PayDayLoan.get_pid(pdl(), key)
       end
 
+      def get(key) do
+        PayDayLoan.get(pdl(), key)
+      end
+
       @doc """
       Returns the number of keys in cache
 
@@ -93,6 +97,11 @@ defmodule PayDayLoan.CacheGenerator do
       @spec pids :: [pid]
       def pids do
         PayDayLoan.pids(pdl())
+      end
+
+      @spec values :: [term]
+      def values do
+        PayDayLoan.values(pdl())
       end
 
       @doc """
