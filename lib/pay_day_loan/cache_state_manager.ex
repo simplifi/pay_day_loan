@@ -83,17 +83,13 @@ defmodule PayDayLoan.CacheStateManager do
   end
 
   @doc """
-  Get the pid corresponding to the given key
+  Get the value corresponding to the given key
 
-  If the process is not alive, deletes the entry and returns
+  If the value is a process that is not alive, deletes the entry and returns
   `{:error, :not_found}`.
   """
-  @spec get_pid(atom, PayDayLoan.key) :: {:ok, pid} | {:error, :not_found}
-  def get_pid(ets_table_id, key) do
-    get(ets_table_id, key)
-  end
-
-  def get(ets_table_id, key) do
+  @spec get_value(atom, PayDayLoan.key) :: {:ok, term} | {:error, :not_found}
+  def get_value(ets_table_id, key) do
     case lookup(ets_table_id, key) do
       {:ok, pre_resolve_value} -> resolve_value(pre_resolve_value, key, ets_table_id)
       {:error, :not_found} -> {:error, :not_found}

@@ -190,7 +190,7 @@ defmodule PayDayLoan do
   end
 
   def peek(pdl = %PayDayLoan{}, key) do
-    CacheStateManager.get(pdl.cache_state_manager, key)
+    CacheStateManager.get_value(pdl.cache_state_manager, key)
   end
 
   @doc """
@@ -396,7 +396,7 @@ defmodule PayDayLoan do
   # if we're already loaded, we just have to grab the pid
   #    this is hopefully the most common path
   defp get(pdl, key, :loaded, try_num) do
-    case CacheStateManager.get(pdl.cache_state_manager, key) do
+    case CacheStateManager.get_value(pdl.cache_state_manager, key) do
       # if the value was removed from the backend, we should remove it from
       # the load state and try again
       {:error, :not_found} ->
@@ -404,7 +404,7 @@ defmodule PayDayLoan do
         get(pdl, key, peek_load_state(pdl, key), try_num - 1)
       {:ok, value} -> {:ok, value}
     end
-    CacheStateManager.get(pdl.cache_state_manager, key)
+    CacheStateManager.get_value(pdl.cache_state_manager, key)
   end
   # if the key is loading, just dwell and try again
   defp get(pdl, key, :loading, try_num) do
