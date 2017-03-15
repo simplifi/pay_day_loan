@@ -10,11 +10,11 @@ elixir:
 matrix:
   exclude:
     - elixir: 1.4.2
-      otp_release: 19.3
+      otp_release: 19.2
       env: COVERALLS=false
   include:
     - elixir: 1.4.2
-      otp_release: 19.3
+      otp_release: 19.2
       env: COVERALLS=true
 env:
   - COVERALLS=false
