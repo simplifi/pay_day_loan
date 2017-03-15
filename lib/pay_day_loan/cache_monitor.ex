@@ -6,7 +6,6 @@ defmodule PayDayLoan.CacheMonitor do
   """
 
   use GenServer
-  alias PayDayLoan.CacheStateManager
 
   defmodule State do
     @moduledoc false
@@ -35,13 +34,13 @@ defmodule PayDayLoan.CacheMonitor do
           if Process.alive?(pid) do
             ensure_monitored(acc, pid)
           else
-            CacheStateManager.delete_value(pdl.cache_state_manager, pid)
+            pdl.backend.delete_value(pdl, pid)
             Map.delete(acc, pid)
           end
         (_, acc) -> acc
       end,
       %{},
-      pdl.cache_state_manager
+      pdl.backend_id
     )
 
     {:ok, %State{pdl: pdl, monitors: monitors}}
@@ -55,8 +54,8 @@ defmodule PayDayLoan.CacheMonitor do
 
   @spec handle_info({:DOWN, term, :process, pid, term}, State.t)
   :: {:noreply, State.t}
-  def handle_info({:DOWN, _, :process, pid, _}, state) do
-    CacheStateManager.delete_value(state.pdl.cache_state_manager, pid)
+  def handle_info({:DOWN, _, :process, pid, _}, state = %State{pdl: pdl}) do
+    pdl.backend.delete_value(pdl, pid)
     monitors = remove_monitor(state.monitors, pid)
     {:noreply, %{state | monitors: monitors}}
   end

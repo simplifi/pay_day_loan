@@ -186,7 +186,7 @@ defmodule GenericCacheTest do
   test "basic integration test" do
     pdl = PDLTestGenericCache.pdl
 
-    assert 0 == PDL.CacheStateManager.size(pdl.cache_state_manager)
+    assert 0 == PDL.CacheStateManager.size(pdl)
 
     assert {:error, :not_found} == PDL.peek(pdl, 1)
 

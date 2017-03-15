@@ -10,7 +10,6 @@ defmodule PayDayLoan.Supervisor do
   use Supervisor
 
   alias PayDayLoan.CacheMonitor
-  alias PayDayLoan.CacheStateManager
   alias PayDayLoan.LoadState
   alias PayDayLoan.LoadWorker
   alias PayDayLoan.KeyCache
@@ -25,7 +24,7 @@ defmodule PayDayLoan.Supervisor do
   @spec init([PayDayLoan.t]) :: 
   {:ok, {:supervisor.sup_flags, [Supervisor.Spec.spec]}}
   def init([pdl]) do
-    create_tables(pdl)
+    setup(pdl)
 
     children = [
       worker(
@@ -47,9 +46,9 @@ defmodule PayDayLoan.Supervisor do
     supervise(children, strategy: :one_for_one)
   end
 
-  defp create_tables(pdl = %PayDayLoan{}) do
-    LoadState.create_table(pdl.load_state_manager)
-    KeyCache.create_table(pdl.key_cache)
-    CacheStateManager.create_table(pdl.cache_state_manager)
+  defp setup(pdl = %PayDayLoan{}) do
+    :ok = LoadState.create_table(pdl.load_state_manager)
+    :ok = KeyCache.create_table(pdl.key_cache)
+    :ok = pdl.backend.setup(pdl)
   end
 end

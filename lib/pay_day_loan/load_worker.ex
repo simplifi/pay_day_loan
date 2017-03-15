@@ -13,7 +13,6 @@ defmodule PayDayLoan.LoadWorker do
   require Logger
 
   alias PayDayLoan.LoadState
-  alias PayDayLoan.CacheStateManager
   alias PayDayLoan.KeyCache
 
   # how long to wait (msec) after startup before we do the initial load
@@ -104,11 +103,7 @@ defmodule PayDayLoan.LoadWorker do
   defp on_load_or_refresh({:ok, value}, pdl, key) do
     _ = LoadState.loaded(pdl.load_state_manager, key)
     _ = KeyCache.add_to_cache(pdl.key_cache, key)
-    CacheStateManager.put(
-      pdl.cache_state_manager,
-      key,
-      value
-    )
+    pdl.backend.put(pdl, key, value)
   end
   defp on_load_or_refresh(:ignore, pdl, key) do
     # treat an :ignore the same as a failure to start

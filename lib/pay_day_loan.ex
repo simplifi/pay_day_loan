@@ -6,9 +6,10 @@ defmodule PayDayLoan do
   @default_load_wait_msec 500
 
   defstruct(
-    cache_state_manager: nil,
+    backend_id: nil,
     load_state_manager: nil,
     cache_monitor: nil,
+    backend: PayDayLoan.CacheStateManager,
     key_cache: nil,
     load_worker: nil,
     callback_module: nil,
@@ -21,7 +22,7 @@ defmodule PayDayLoan do
   @typedoc """
   Struct encapsulating a PDL cache.
 
-  * `cache_state_manager` - ETS table id for cache state table and
+  * `backend_id` - ETS table id for cache state table and
      registration name for the monitoring GenServer.
   * `load_state_manager` - ETS table id for load state table.
   * `key_cache` - ETS table id for key cache table.
@@ -34,9 +35,10 @@ defmodule PayDayLoan do
      Default 500
   """
   @type t :: %PayDayLoan{
-    cache_state_manager: atom,
+    backend_id: atom,
     load_state_manager: atom,
     cache_monitor: atom,
+    backend: atom,
     key_cache: atom,
     load_worker: atom,
     callback_module: module,
@@ -130,7 +132,6 @@ defmodule PayDayLoan do
   end
 
   alias PayDayLoan.LoadState
-  alias PayDayLoan.CacheStateManager
   alias PayDayLoan.KeyCache
 
   @doc """
@@ -192,7 +193,7 @@ defmodule PayDayLoan do
   end
 
   def peek(pdl = %PayDayLoan{}, key) do
-    CacheStateManager.get_value(pdl.cache_state_manager, key)
+    pdl.backend.get_value(pdl, key)
   end
 
   @doc """
@@ -244,7 +245,7 @@ defmodule PayDayLoan do
   """
   @spec cache_size(pdl :: t) :: non_neg_integer
   def cache_size(pdl = %PayDayLoan{}) do
-    CacheStateManager.size(pdl.cache_state_manager)
+    pdl.backend.size(pdl)
   end
 
   @doc """
@@ -252,7 +253,7 @@ defmodule PayDayLoan do
   """
   @spec keys(pdl :: t) :: [PayDayLoan.key]
   def keys(pdl = %PayDayLoan{}) do
-    CacheStateManager.all_keys(pdl.cache_state_manager)
+    pdl.backend.keys(pdl)
   end
 
   @doc """
@@ -264,7 +265,7 @@ defmodule PayDayLoan do
   end
 
   def values(pdl = %PayDayLoan{}) do
-    CacheStateManager.all_values(pdl.cache_state_manager)
+    pdl.backend.values(pdl)
   end
 
   @doc """
@@ -276,7 +277,7 @@ defmodule PayDayLoan do
     reducer :: (({key, pid}, term) -> term)) :: term
   def reduce(pdl = %PayDayLoan{}, acc0, reducer)
   when is_function(reducer, 2) do
-    CacheStateManager.reduce(pdl.cache_state_manager, acc0, reducer)
+    pdl.backend.reduce(pdl, acc0, reducer)
   end
 
   @doc """
@@ -326,7 +327,7 @@ defmodule PayDayLoan do
         # not found
         _ = LoadState.loaded(pdl.load_state_manager, key)
         _ = KeyCache.add_to_cache(pdl.key_cache, key)
-        CacheStateManager.put(pdl.cache_state_manager, key, value)
+        pdl.backend.put(pdl, key, value)
       end
     )
   end
@@ -339,7 +340,7 @@ defmodule PayDayLoan do
   """
   @spec uncache_key(t, key) :: :ok
   def uncache_key(pdl = %PayDayLoan{}, key) do
-    :ok = CacheStateManager.delete_key(pdl.cache_state_manager, key)
+    :ok = pdl.backend.delete_key(pdl, key)
     :ok = LoadState.unload(pdl.load_state_manager, key)
     :ok = KeyCache.remove(pdl.key_cache, key)
   end
@@ -352,9 +353,10 @@ defmodule PayDayLoan do
     name = callback_module_to_name_string(callback_module)
 
     defaults = %PayDayLoan{
-      cache_state_manager: String.to_atom(name <> "_cache_state_manager"),
+      backend_id:          String.to_atom(name <> "_backend"),
       load_state_manager:  String.to_atom(name <> "_load_state_manager"),
       cache_monitor:       String.to_atom(name <> "_cache_monitor"),
+      backend:             PayDayLoan.CacheStateManager,
       key_cache:           String.to_atom(name <> "_key_cache"),
       load_worker:         String.to_atom(name <> "_load_worker"),
       supervisor_name:     String.to_atom(name <> "_supervisor"),
@@ -399,7 +401,7 @@ defmodule PayDayLoan do
   # if we're already loaded, we just have to grab the pid
   #    this is hopefully the most common path
   defp get(pdl, key, :loaded, try_num) do
-    case CacheStateManager.get_value(pdl.cache_state_manager, key) do
+    case pdl.backend.get_value(pdl, key) do
       # if the value was removed from the backend, we should remove it from
       # the load state and try again
       {:error, :not_found} ->
@@ -407,7 +409,7 @@ defmodule PayDayLoan do
         get(pdl, key, peek_load_state(pdl, key), try_num - 1)
       {:ok, value} -> {:ok, value}
     end
-    CacheStateManager.get_value(pdl.cache_state_manager, key)
+    pdl.backend.get_value(pdl, key)
   end
   # if the key is loading, just dwell and try again
   defp get(pdl, key, :loading, try_num) do
