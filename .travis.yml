@@ -1,11 +1,22 @@
 language: elixir
 otp_release:
-  - 18.2.1
-  - 19.0.2
+  - 18.3
+  - 19.3
 elixir:
   - 1.3.4
-  - 1.4.1
+  - 1.4.2
+# exclude the most recent versions of otp/elixir and
+# re-include it with COVERALLS=true so that we get just one coveralls report
+matrix:
+  exclude:
+    - elixir: 1.4.2
+      otp_release: 19.3
+      env: COVERALLS=false
+  include:
+    - elixir: 1.4.2
+      otp_release: 19.3
+      env: COVERALLS=true
+env:
+  - COVERALLS=false
 script:
-  - mix deps.get
-  - MIX_ENV=test mix deps.compile
-  - MIX_ENV=test mix coveralls.travis
+  - ./scripts/ci_build.sh
