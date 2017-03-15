@@ -48,7 +48,7 @@ defmodule PayDayLoan.CacheStateManager do
   when is_function(reducer, 2) do
     :ets.foldl(
       fn({k, v}, acc) ->
-        case resolve_value(v, k) do
+        case resolve_value(v, k, ets_table_id) do
           {:ok, resolved_v} -> reducer.({k, resolved_v}, acc)
           {:error, :not_found} -> acc
         end
@@ -75,13 +75,9 @@ defmodule PayDayLoan.CacheStateManager do
   end
 
   @doc """
-  Returns a list of all cached pids
+  Returns a list of all cached values
   """
-  @spec all_pids(atom) :: [pid]
-  def all_pids(ets_table_id) do
-    reduce(ets_table_id, [], fn({_k, pid}, acc) -> [pid | acc] end)
-  end
-
+  @spec all_values(atom) :: [term]
   def all_values(ets_table_id) do
     reduce(ets_table_id, [], fn({_k, v}, acc) -> [v | acc] end)
   end
@@ -94,41 +90,26 @@ defmodule PayDayLoan.CacheStateManager do
   """
   @spec get_pid(atom, PayDayLoan.key) :: {:ok, pid} | {:error, :not_found}
   def get_pid(ets_table_id, key) do
-    case lookup(ets_table_id, key) do
-      {:ok, pid} ->
-        if Process.alive?(pid) do
-          {:ok, pid}
-        else
-          :ok = delete_pid(ets_table_id, pid)
-          {:error, :not_found}
-        end
-      {:error, :not_found} -> {:error, :not_found}
-    end
+    get(ets_table_id, key)
   end
 
   def get(ets_table_id, key) do
     case lookup(ets_table_id, key) do
-      {:ok, pre_resolve_value} -> resolve_value(pre_resolve_value, key)
+      {:ok, pre_resolve_value} -> resolve_value(pre_resolve_value, key, ets_table_id)
       {:error, :not_found} -> {:error, :not_found}
     end
   end
 
-  defp resolve_value(cb, key) when is_function(cb, 1) do
-    cb.(key)
-  end
-  defp resolve_value(value, _key), do: {:ok, value}
-
   @doc """
-  Add a pid to the cache and monitor it.
+  Add a value to the cache and monitor it if it is a pid.
   """
-  @spec put_pid(atom, PayDayLoan.key, pid) :: :ok
-  def put_pid(id, key, pid) do
-    :ets.insert(id, {key, pid})
-    GenServer.cast(id, {:monitor, pid})
-  end
-
+  @spec put(atom, PayDayLoan.key, term) :: :ok
   def put(id, key, value) do
     :ets.insert(id, {key, value})
+    if is_pid(value) do
+      GenServer.cast(id, {:monitor, value})
+    end
+    :ok
   end
 
   @doc """
@@ -166,16 +147,19 @@ defmodule PayDayLoan.CacheStateManager do
   def init([pdl]) do
     # monitor all existing pids, clean up if they have died
     #   (could happen when this process restarts)
-    monitors = Enum.reduce(
-      all_pids(pdl.cache_state_manager),
+    monitors = :ets.foldl(
+      fn
+        ({_k, pid}, acc) when is_pid(pid) ->
+          if Process.alive?(pid) do
+            ensure_monitored(acc, pid)
+          else
+            delete_pid(pdl.cache_state_manager, pid)
+            Map.delete(acc, pid)
+          end
+        (_, acc) -> acc
+      end,
       %{},
-      fn(pid, acc) ->
-        if Process.alive?(pid) do
-          ensure_monitored(acc, pid)
-        else
-          delete_pid(pdl.cache_state_manager, pid)
-        end
-      end
+      pdl.cache_state_manager
     )
 
     {:ok, %State{pdl: pdl, monitors: monitors}}
@@ -208,4 +192,17 @@ defmodule PayDayLoan.CacheStateManager do
   defp remove_monitor(monitors, pid) do
     Map.delete(monitors, pid)
   end
+
+  defp resolve_value(cb, key, _ets_table_id) when is_function(cb, 1) do
+    cb.(key)
+  end
+  defp resolve_value(pid, _key, ets_table_id) when is_pid(pid) do
+    if Process.alive?(pid) do
+      {:ok, pid}
+    else
+      :ok = delete_pid(ets_table_id, pid)
+      {:error, :not_found}
+    end
+  end
+  defp resolve_value(value, _key, _ets_table_id), do: {:ok, value}
 end

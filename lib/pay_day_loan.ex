@@ -186,7 +186,7 @@ defmodule PayDayLoan do
   @spec peek_pid(pdl :: t, key :: PayDayLoan.key)
   :: {:ok, pid} | {:error, :not_found}
   def peek_pid(pdl = %PayDayLoan{}, key) do
-    CacheStateManager.get_pid(pdl.cache_state_manager, key)
+    peek(pdl, key)
   end
 
   def peek(pdl = %PayDayLoan{}, key) do
@@ -230,7 +230,7 @@ defmodule PayDayLoan do
   """
   @spec get_pid(pdl :: t, key) :: {:ok, pid} | {:error, error}
   def get_pid(pdl = %PayDayLoan{}, key) do
-    get_pid(pdl, key, peek_load_state(pdl, key), pdl.load_num_tries)
+    get(pdl, key)
   end
 
   def get(pdl = %PayDayLoan{}, key) do
@@ -258,7 +258,7 @@ defmodule PayDayLoan do
   """
   @spec pids(pdl :: t) :: [pid]
   def pids(pdl = %PayDayLoan{}) do
-    CacheStateManager.all_pids(pdl.cache_state_manager)
+    values(pdl)
   end
 
   def values(pdl = %PayDayLoan{}) do
@@ -295,10 +295,7 @@ defmodule PayDayLoan do
         found_callback,
         not_found_callback \\ fn -> {:error, :not_found} end
       ) do
-    case peek_pid(pdl, key) do
-      {:ok, pid} -> found_callback.(pid)
-      {:error, :not_found} -> not_found_callback.()
-    end
+    with_value(pdl, key, found_callback, not_found_callback)
   end
 
   def with_value(pdl, key, found_callback, not_found_callback \\ fn -> {:error, :not_found} end) do
@@ -313,24 +310,6 @@ defmodule PayDayLoan do
   already in cache with a different pid.
   """
   @spec cache(t, key, pid) :: :ok | {:error, pid}
-  def cache(pdl = %PayDayLoan{}, key, pid) when is_pid(pid) do
-    with_pid(
-      pdl,
-      key,
-      fn
-        # found with the same pid
-        (^pid) -> :ok
-        # found with a different pid
-        (other_pid) -> {:error, other_pid}
-      end,
-      fn() ->
-        # not found
-        _ = LoadState.loaded(pdl.load_state_manager, key)
-        _ = KeyCache.add_to_cache(pdl.key_cache, key)
-        CacheStateManager.put_pid(pdl.cache_state_manager, key, pid)
-      end
-    )
-  end
   def cache(pdl = %PayDayLoan{}, key, value) do
     with_value(
       pdl,
@@ -397,11 +376,11 @@ defmodule PayDayLoan do
   defp nil_merge(_k, _v1, v2), do: v2
 
   ######################################################################
-  # main get_pid implementation
+  # main get implementation
   #
-  # this is the meat of what happens when we request a pid
+  # this is the meat of what happens when we request a value
   #
-  # get_pid/4 is a try / wait / retry recursive function where each iteration
+  # get/4 is a try / wait / retry recursive function where each iteration
   # depends on the load state of the requested key (e.g., unknown, requested,
   # loading, loaded, or failed)
   #
@@ -410,63 +389,12 @@ defmodule PayDayLoan do
 
   # if we were unable to load this key, remove it from the
   #   key cache
-  defp get_pid(pdl, key, _load_state, 0) do
+  defp get(pdl, key, _load_state, 0) do
     KeyCache.remove(pdl.key_cache, key)
     {:error, :timed_out}
   end
   # if we're already loaded, we just have to grab the pid
   #    this is hopefully the most common path
-  defp get_pid(pdl, key, :loaded, try_num) do
-    case peek_pid(pdl, key) do
-      # if the pid died, we should remove it from the load state
-      #   cache and try again
-      {:error, :not_found} ->
-        :ok = LoadState.unload(pdl.load_state_manager, key)
-        get_pid(pdl, key, peek_load_state(pdl, key), try_num - 1)
-      {:ok, pid} -> {:ok, pid}
-    end
-  end
-  # if the key is loading, just dwell and try again
-  defp get_pid(pdl, key, :loading, try_num) do
-    :timer.sleep(pdl.load_wait_msec)
-    get_pid(pdl, key, peek_load_state(pdl, key), try_num - 1)
-  end
-  # if the key has been requested but isn't loading,
-  # ping the load worker to make sure it knows it has
-  # work to do and then dwell and try again
-  defp get_pid(pdl, key, :requested, try_num) do
-    GenServer.cast(pdl.load_worker, :ping)
-    # rest is the same as :loading (don't double decrement try_num)
-    get_pid(pdl, key, :loading, try_num)
-  end
-  # cache load failed
-  # return an error and clear the failure so that we can try again
-  defp get_pid(pdl, key, :failed, _try_num) do
-    LoadState.unload(pdl.load_state_manager, key)
-    {:error, :failed}
-  end
-  # load state doesn't know about this key - i.e.,
-  # it has not been requested (at least since the last time
-  # it cached out)
-  defp get_pid(pdl, key, nil, try_num) do
-    # check if the key even exists in the cache source
-    if KeyCache.exist?(pdl.key_cache, pdl.callback_module, key) do
-      # we just need to request a load and wait
-      request_load(pdl, key)
-      GenServer.cast(pdl.load_worker, :ping)
-      :timer.sleep(pdl.load_wait_msec)
-      get_pid(pdl, key, peek_load_state(pdl, key), try_num - 1)
-    else
-      # if the key doesn't exist in cache source, we can immediately return
-      # :not_found
-      {:error, :not_found}
-    end
-  end
-
-  defp get(pdl, key, _load_state, 0) do
-    KeyCache.remove(pdl.key_cache, key)
-    {:error, :timed_out}
-  end
   defp get(pdl, key, :loaded, try_num) do
     case CacheStateManager.get(pdl.cache_state_manager, key) do
       # if the value was removed from the backend, we should remove it from
@@ -478,25 +406,38 @@ defmodule PayDayLoan do
     end
     CacheStateManager.get(pdl.cache_state_manager, key)
   end
+  # if the key is loading, just dwell and try again
   defp get(pdl, key, :loading, try_num) do
     :timer.sleep(pdl.load_wait_msec)
     get(pdl, key, peek_load_state(pdl, key), try_num - 1)
   end
+  # if the key has been requested but isn't loading,
+  # ping the load worker to make sure it knows it has
+  # work to do and then dwell and try again
   defp get(pdl, key, :requested, try_num) do
     GenServer.cast(pdl.load_worker, :ping)
+    # rest is the same as :loading (don't double decrement try_num)
     get(pdl, key, :loading, try_num)
   end
+  # cache load failed
+  # return an error and clear the failure so that we can try again
   defp get(pdl, key, :failed, _try_num) do
     LoadState.unload(pdl.load_state_manager, key)
     {:error, :failed}
   end
+  # load state doesn't know about this key - i.e.,
+  # it has not been requested (at least since the last time
+  # it cached out)
   defp get(pdl, key, nil, try_num) do
+    # check if the key even exists in the cache source
     if KeyCache.exist?(pdl.key_cache, pdl.callback_module, key) do
+      # we just need to request a load and wait
       request_load(pdl, key)
       GenServer.cast(pdl.load_worker, :ping)
       :timer.sleep(pdl.load_wait_msec)
       get(pdl, key, peek_load_state(pdl, key), try_num - 1)
     else
+      # if the key doesn't exist in cache source, we can immediately return
       {:error, :not_found}
     end
   end
