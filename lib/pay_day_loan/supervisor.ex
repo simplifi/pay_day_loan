@@ -9,6 +9,7 @@ defmodule PayDayLoan.Supervisor do
 
   use Supervisor
 
+  alias PayDayLoan.CacheMonitor
   alias PayDayLoan.CacheStateManager
   alias PayDayLoan.LoadState
   alias PayDayLoan.LoadWorker
@@ -28,10 +29,10 @@ defmodule PayDayLoan.Supervisor do
 
     children = [
       worker(
-        CacheStateManager,
+        CacheMonitor,
         [
           pdl,
-          [name: pdl.cache_state_manager]
+          [name: pdl.cache_monitor]
         ]
       ),
       worker(

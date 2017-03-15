@@ -8,6 +8,7 @@ defmodule PayDayLoan do
   defstruct(
     cache_state_manager: nil,
     load_state_manager: nil,
+    cache_monitor: nil,
     key_cache: nil,
     load_worker: nil,
     callback_module: nil,
@@ -35,6 +36,7 @@ defmodule PayDayLoan do
   @type t :: %PayDayLoan{
     cache_state_manager: atom,
     load_state_manager: atom,
+    cache_monitor: atom,
     key_cache: atom,
     load_worker: atom,
     callback_module: module,
@@ -352,6 +354,7 @@ defmodule PayDayLoan do
     defaults = %PayDayLoan{
       cache_state_manager: String.to_atom(name <> "_cache_state_manager"),
       load_state_manager:  String.to_atom(name <> "_load_state_manager"),
+      cache_monitor:       String.to_atom(name <> "_cache_monitor"),
       key_cache:           String.to_atom(name <> "_key_cache"),
       load_worker:         String.to_atom(name <> "_load_worker"),
       supervisor_name:     String.to_atom(name <> "_supervisor"),

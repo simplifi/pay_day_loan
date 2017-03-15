@@ -1,33 +1,7 @@
 defmodule PayDayLoan.CacheStateManager do
   @moduledoc """
   Keeps track of which keys are cached.
-
-  The implementation of this has two parts:
-  1. An ETS table mapping key to cache pid.
-  2. A GenServer that monitors the cached pids and is responsible
-     for removing pids from the ETS table when the corresponding
-     process dies.
-
-  You shouldn't need to call any of the functions in this module
-  manually, but they can be useful for debugging.
   """
-
-  use GenServer
-
-  defmodule State do
-    @moduledoc false
-
-    defstruct(pdl: nil, monitors: %{})
-    @type t :: %__MODULE__{}
-  end
-  alias PayDayLoan.CacheStateManager.State
-
-  # used by the supervisor
-  @doc false
-  @spec start_link(PayDayLoan.t, GenServer.options) :: GenServer.on_start
-  def start_link(pdl = %PayDayLoan{}, gen_server_opts \\ []) do
-    GenServer.start_link(__MODULE__, [pdl], gen_server_opts)
-  end
 
   # this should get called by the supervisor during startup
   @doc false
@@ -120,11 +94,11 @@ defmodule PayDayLoan.CacheStateManager do
   end
 
   @doc """
-  Remove a pid from cache
+  Remove a value from cache
   """
-  @spec delete_pid(atom, pid) :: :ok
-  def delete_pid(ets_table_id, pid) do
-    true = :ets.match_delete(ets_table_id, {:'_', pid})
+  @spec delete_value(atom, term) :: :ok
+  def delete_value(ets_table_id, value) do
+    true = :ets.match_delete(ets_table_id, {:'_', value})
     :ok
   end
 
@@ -137,58 +111,6 @@ defmodule PayDayLoan.CacheStateManager do
     :ok
   end
 
-  ######################################################################
-  # Monitor GenServer callbacks
-  @spec init([PayDayLoan.t]) :: {:ok, State.t}
-  def init([pdl]) do
-    # monitor all existing pids, clean up if they have died
-    #   (could happen when this process restarts)
-    monitors = :ets.foldl(
-      fn
-        ({_k, pid}, acc) when is_pid(pid) ->
-          if Process.alive?(pid) do
-            ensure_monitored(acc, pid)
-          else
-            delete_pid(pdl.cache_state_manager, pid)
-            Map.delete(acc, pid)
-          end
-        (_, acc) -> acc
-      end,
-      %{},
-      pdl.cache_state_manager
-    )
-
-    {:ok, %State{pdl: pdl, monitors: monitors}}
-  end
-
-  @spec handle_cast({:monitor, pid}, State.t) :: {:noreply, State.t}
-  def handle_cast({:monitor, pid}, state) do
-    monitors = ensure_monitored(state.monitors, pid)
-    {:noreply, %{state | monitors: monitors}}
-  end
-
-  @spec handle_info({:DOWN, term, :process, pid, term}, State.t)
-  :: {:noreply, State.t}
-  def handle_info({:DOWN, _, :process, pid, _}, state) do
-    delete_pid(state.pdl.cache_state_manager, pid)
-    monitors = remove_monitor(state.monitors, pid)
-    {:noreply, %{state | monitors: monitors}}
-  end
-
-  # make sure we only monitor pids once
-  defp ensure_monitored(monitors, pid) do
-    if Map.get(monitors, pid) do
-      monitors
-    else
-      monitor_ref = Process.monitor(pid)
-      Map.put(monitors, pid, monitor_ref)
-    end
-  end
-
-  defp remove_monitor(monitors, pid) do
-    Map.delete(monitors, pid)
-  end
-
   defp resolve_value(cb, key, _ets_table_id) when is_function(cb, 1) do
     cb.(key)
   end
@@ -196,7 +118,7 @@ defmodule PayDayLoan.CacheStateManager do
     if Process.alive?(pid) do
       {:ok, pid}
     else
-      :ok = delete_pid(ets_table_id, pid)
+      :ok = delete_value(ets_table_id, pid)
       {:error, :not_found}
     end
   end

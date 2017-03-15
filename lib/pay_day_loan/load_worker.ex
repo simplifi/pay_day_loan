@@ -27,12 +27,6 @@ defmodule PayDayLoan.LoadWorker do
     GenServer.start_link(__MODULE__, [init_state], gen_server_opts)
   end
 
-  @doc false
-  @spec start(PayDayLoan.t, GenServer.options) :: GenServer.on_start
-  def start(init_state = %PayDayLoan{}, gen_server_opts \\ []) do
-    GenServer.start(__MODULE__, [init_state], gen_server_opts)
-  end
-
   @spec init([PayDayLoan.t]) :: {:ok, PayDayLoan.t}
   def init([pdl]) do
     Process.send_after(self(), :ping, @startup_dwell)

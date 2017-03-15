@@ -348,17 +348,17 @@ defmodule ProcessCacheTest do
 
     {:ok, pid1} = PDLTestProcessCache.get_pid(1)
 
-    previous_pid = Process.whereis(pdl.cache_state_manager)
+    previous_pid = Process.whereis(pdl.cache_monitor)
 
-    :ok = GenServer.stop(pdl.cache_state_manager)
+    :ok = GenServer.stop(pdl.cache_monitor)
 
     # make sure that it restarts via the supervisor
     wait_for(fn ->
-      pid = Process.whereis(pdl.cache_state_manager)
+      pid = Process.whereis(pdl.cache_monitor)
       is_pid(pid) && Process.alive?(pid)
     end)
 
-    refute previous_pid == Process.whereis(pdl.cache_state_manager)
+    refute previous_pid == Process.whereis(pdl.cache_monitor)
 
     # the new monitor should be monitoring the pid now
     Agent.stop(pid1)
