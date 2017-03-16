@@ -1,4 +1,4 @@
-defmodule GenericCacheTest do
+defmodule PayDayLoan.Backends.GenericTest do
   use ExUnit.Case
 
   alias PayDayLoan, as: PDL
@@ -8,14 +8,14 @@ defmodule GenericCacheTest do
   alias PayDayLoanTest.Support.LoadHistory
 
   #our cache for testing
-  defmodule PDLTestGenericCache do
+  defmodule Cache do
     # we override batch_size here so we can test overrides -
     #   this is not necessary in general use
     use(
       PayDayLoan,
       batch_size: 10,
       load_wait_msec: 50,
-      callback_module: GenericCacheTest.PDLTestGenericImplementation
+      callback_module: PayDayLoan.Backends.GenericTest.Implementation
     )
   end
 
@@ -41,7 +41,7 @@ defmodule GenericCacheTest do
   end
 
   # loader behaviour implementation
-  defmodule PDLTestGenericImplementation do
+  defmodule Implementation do
     use PayDayLoan.Support.TestImplementation
 
     def on_new(key, value) do
@@ -64,11 +64,7 @@ defmodule GenericCacheTest do
     end
   end
 
-  def pdl do
-    PDLTestGenericCache.pdl()
-  end
-  
-  use PayDayLoan.Support.CommonTests
+  use PayDayLoan.Support.CommonTests, cache: Cache
 
   setup do
     CacheBackend.start_link()
@@ -76,21 +72,20 @@ defmodule GenericCacheTest do
   end
 
   test "basic integration test" do
-    assert 0 == PDL.EtsBackend.size(pdl())
+    key = 1
 
-    assert {:error, :not_found} == PDL.peek(pdl(), 1)
+    assert 0 == Cache.pdl().backend.size(Cache.pdl())
 
-    assert :requested == PDL.query_load_state(pdl(), 1)
+    assert {:error, :not_found} == PDL.peek(Cache.pdl(), key)
+    assert :requested == PDL.query_load_state(Cache.pdl(), key)
 
-    GenServer.cast(pdl().load_worker, :ping)
+    GenServer.cast(Cache.pdl().load_worker, :ping)
 
-    {:ok, "V1"} = PDLTestGenericCache.get(1)
+    get_result = Cache.get(key)
+    assert :loaded == PDL.query_load_state(Cache.pdl(), key)
+    assert get_result == PDL.peek(Cache.pdl(), key)
 
-    assert :loaded == PDL.query_load_state(pdl(), 1)
-
-    assert {:ok, "V1"} == PDL.peek(pdl(), 1)
-
-    assert PDL.KeyCache.in_cache?(pdl().key_cache, 1)
+    assert PDL.KeyCache.in_cache?(Cache.pdl().key_cache, key)
   end
 
   test "loading happens in bulk" do
@@ -99,12 +94,12 @@ defmodule GenericCacheTest do
     tasks = (1..n)
     |> Enum.map(fn(ix) ->
       Task.async(fn ->
-        {:ok, _pid} = PDLTestGenericCache.get(ix)
+        {:ok, _pid} = Cache.get(ix)
       end)
     end)
 
     Enum.each(tasks, fn(task) -> Task.await(task) end)
-    assert n == PDLTestGenericCache.size
+    assert n == Cache.size
 
     assert length(LoadHistory.bulk_loads) > 0
     assert n == length(LoadHistory.news)
@@ -112,15 +107,15 @@ defmodule GenericCacheTest do
 
     (1..n)
     |> Enum.each(fn(ix) ->
-      assert PDL.KeyCache.in_cache?(pdl().key_cache, ix)
+      assert PDL.KeyCache.in_cache?(Cache.pdl().key_cache, ix)
     end)
   end
 
   test "refreshing a cache element" do
-    replaced_key = PDLTestGenericImplementation.key_that_shall_be_replaced
+    replaced_key = Implementation.key_that_shall_be_replaced
 
-    assert {:ok, "V1"} == PDLTestGenericCache.get(1)
-    assert {:ok, "V#{replaced_key}"} == PDLTestGenericCache.get(replaced_key)
+    assert {:ok, "V1"} == Cache.get(1)
+    assert {:ok, "V#{replaced_key}"} == Cache.get(replaced_key)
 
     news = LoadHistory.news
     assert 2 == length(news)
@@ -130,18 +125,18 @@ defmodule GenericCacheTest do
     assert {:ok, "V1"} == CacheBackend.get(1)
     assert {:ok, "V#{replaced_key}"} == CacheBackend.get(replaced_key)
 
-    PDLTestGenericCache.request_load([1, replaced_key])
+    Cache.request_load([1, replaced_key])
 
     wait_for(
       fn ->
-        PDL.LoadState.any_requested?(pdl().load_state_manager)
+        PDL.LoadState.any_requested?(Cache.pdl().load_state_manager)
       end
     )
 
-    assert {:ok, "V1"} == PDLTestGenericCache.get(1)
+    assert {:ok, "V1"} == Cache.get(1)
     assert {:ok, "V1"} == CacheBackend.get(1)
 
-    assert {:ok, "Vreplaced"} == PDLTestGenericCache.get(replaced_key)
+    assert {:ok, "Vreplaced"} == Cache.get(replaced_key)
     assert {:ok, "Vreplaced"} == CacheBackend.get(replaced_key)
 
     refreshes = LoadHistory.refreshes
@@ -154,56 +149,56 @@ defmodule GenericCacheTest do
   end
 
   test "requesting a key that is in key cache but fails to load" do
-    key = PDLTestGenericImplementation.key_that_shall_not_be_loaded
+    key = Implementation.key_that_shall_not_be_loaded
 
-    assert {:error, :failed} == PDLTestGenericCache.get_pid(key)
+    assert {:error, :failed} == Cache.get_pid(key)
     assert [{:loaded, [key]}] == LoadHistory.loads
-    assert nil == PDL.LoadState.peek(pdl().load_state_manager, key)
+    assert nil == PDL.LoadState.peek(Cache.pdl().load_state_manager, key)
     # we hold onto the knowledge that the key exists
-    assert PDL.KeyCache.in_cache?(pdl().key_cache, key)
+    assert PDL.KeyCache.in_cache?(Cache.pdl().key_cache, key)
   end
 
   test "requesting a key that does not exist" do
-    key = PDLTestGenericImplementation.key_that_does_not_exist
+    key = Implementation.key_that_does_not_exist
 
-    assert {:error, :not_found} == PDLTestGenericCache.get_pid(key)
+    assert {:error, :not_found} == Cache.get_pid(key)
     assert [] == LoadHistory.loads
-    refute PDL.KeyCache.in_cache?(pdl().key_cache, key)
+    refute PDL.KeyCache.in_cache?(Cache.pdl().key_cache, key)
   end
 
   test "large batches don't require an extra ping" do
-    batch_size = pdl().batch_size
+    batch_size = Cache.pdl().batch_size
     keys = Enum.to_list(1..(2 * batch_size))
 
-    PDLTestGenericCache.request_load(keys)
+    Cache.request_load(keys)
 
-    wait_for(fn -> length(keys) == PDLTestGenericCache.size end)
+    wait_for(fn -> length(keys) == Cache.size end)
 
-    assert length(keys) == PDLTestGenericCache.size
+    assert length(keys) == Cache.size
   end
 
   test "load failures are ignored (should be handled in callback)" do
-    key = PDLTestGenericImplementation.key_that_will_not_new
-    assert {:error, :failed} == PDLTestGenericCache.get_pid(key)
+    key = Implementation.key_that_will_not_new
+    assert {:error, :failed} == Cache.get_pid(key)
     # should get cleared from the load state cache
-    assert nil == PDL.peek_load_state(pdl(), key)
+    assert nil == PDL.peek_load_state(Cache.pdl(), key)
   end
 
   test "refresh failures are ignored (should be handled in callback)" do
-    key = PDLTestGenericImplementation.key_that_will_not_refresh
+    key = Implementation.key_that_will_not_refresh
 
     # it should load
-    {:ok, _value} = PDLTestGenericCache.get(key)
+    {:ok, _value} = Cache.get(key)
 
-    PDLTestGenericCache.request_load(key)
+    Cache.request_load(key)
 
     # the refresh fixture will delete the existing value
     wait_for(fn -> CacheBackend.get(key) == {:error, :not_found} end)
 
     # fail to refresh
-    assert {:error, :failed} == PDLTestGenericCache.get(key)
+    assert {:error, :failed} == Cache.get(key)
     # should get cleared from the load state cache
-    assert nil == PDL.peek_load_state(pdl(), key)
+    assert nil == PDL.peek_load_state(Cache.pdl(), key)
   end
 
   test "working with key/value lists" do
@@ -212,18 +207,18 @@ defmodule GenericCacheTest do
     tasks = (1..n)
     |> Enum.map(fn(ix) ->
       Task.async(fn ->
-        {:ok, _value} = PDLTestGenericCache.get(ix)
+        {:ok, _value} = Cache.get(ix)
       end)
     end)
 
     Enum.each(tasks, fn(task) -> Task.await(task) end)
-    assert n == PDLTestGenericCache.size
+    assert n == Cache.size
 
     expect_keys = Enum.to_list(1..n)
     expect_values = Enum.map(expect_keys, fn(k) -> "V#{k}" end)
 
-    assert MapSet.new(expect_keys) == MapSet.new(PDLTestGenericCache.keys)
-    assert MapSet.new(expect_values) == MapSet.new(PDLTestGenericCache.values)
+    assert MapSet.new(expect_keys) == MapSet.new(Cache.keys)
+    assert MapSet.new(expect_values) == MapSet.new(Cache.values)
 
     expect_map = Enum.reduce(expect_keys, %{},
       fn(k, acc) ->
@@ -231,94 +226,94 @@ defmodule GenericCacheTest do
         Map.put(acc, k, value)
       end)
     
-    got_map = PDLTestGenericCache.reduce(%{},
+    got_map = Cache.reduce(%{},
       fn({k, value}, acc) -> Map.put(acc, k, value) end)
 
     assert expect_map == got_map
   end
 
   test "when a value is removed from the backend, its key is unloaded" do
-    key = PDLTestGenericImplementation.key_that_is_removed_from_backend
-    {:ok, v1} = PDLTestGenericCache.get(key)
+    key = Implementation.key_that_is_removed_from_backend
+    {:ok, v1} = Cache.get(key)
 
     assert {:ok, v1} == CacheBackend.get(key)
 
     # delete on the backend
     CacheBackend.delete(key)
 
-    assert {:error, :not_found} == PDLTestGenericCache.get(key)
-    assert nil == PDL.LoadState.peek(pdl().load_state_manager, key)
+    assert {:error, :not_found} == Cache.get(key)
+    assert nil == PDL.LoadState.peek(Cache.pdl().load_state_manager, key)
     # we hold onto the knowledge that the key exists
-    assert PDL.KeyCache.in_cache?(pdl().key_cache, key)
+    assert PDL.KeyCache.in_cache?(Cache.pdl().key_cache, key)
   end
 
   test "when the monitor is killed, it restarts" do
-    {:ok, "V1"} = PDLTestGenericCache.get(1)
+    {:ok, "V1"} = Cache.get(1)
 
-    previous_pid = Process.whereis(pdl().cache_monitor)
+    previous_pid = Process.whereis(Cache.pdl().cache_monitor)
 
-    :ok = GenServer.stop(pdl().cache_monitor)
+    :ok = GenServer.stop(Cache.pdl().cache_monitor)
 
     # make sure that it restarts via the supervisor
     wait_for(fn ->
-      pid = Process.whereis(pdl().cache_monitor)
+      pid = Process.whereis(Cache.pdl().cache_monitor)
       is_pid(pid) && Process.alive?(pid)
     end)
 
-    refute previous_pid == Process.whereis(pdl().cache_monitor)
+    refute previous_pid == Process.whereis(Cache.pdl().cache_monitor)
 
     # cache state is unchanged
-    assert {:ok, "V1"} == PDLTestGenericCache.get(1)
+    assert {:ok, "V1"} == Cache.get(1)
   end
 
   test "manually adding an element to the cache" do
     CacheBackend.put(1, 42)
-    PDLTestGenericCache.cache(1, &CacheBackend.get/1)
+    Cache.cache(1, &CacheBackend.get/1)
 
-    assert [1] == PDLTestGenericCache.keys
-    assert ["V42"] == PDLTestGenericCache.values
+    assert [1] == Cache.keys
+    assert ["V42"] == Cache.values
 
-    assert {:ok, "V42"} == PDLTestGenericCache.get(1)
+    assert {:ok, "V42"} == Cache.get(1)
 
     # can't be manually overwritten
-    assert {:error, "V42"} == PDLTestGenericCache.cache(1, 0)
+    assert {:error, "V42"} == Cache.cache(1, 0)
   end
 
   test "manually removing an element from the cache" do
-    {:ok, v} = PDLTestGenericCache.get(1)
+    {:ok, v} = Cache.get(1)
 
-    assert {:ok, v} == PDLTestGenericCache.get(1)
+    assert {:ok, v} == Cache.get(1)
 
-    :ok = PayDayLoan.uncache_key(pdl(), 1)
+    :ok = PayDayLoan.uncache_key(Cache.pdl(), 1)
 
-    assert [] == PDLTestGenericCache.keys
-    assert [] == PDLTestGenericCache.values
+    assert [] == Cache.keys
+    assert [] == Cache.values
 
     # value is still in the backend
     assert {:ok, "V1"} == CacheBackend.get(1)
   end
 
   test "when new returns :ignore" do
-    key = PDLTestGenericImplementation.key_that_returns_ignore_on_new
-    assert {:error, :failed} == PDLTestGenericCache.get(key)
+    key = Implementation.key_that_returns_ignore_on_new
+    assert {:error, :failed} == Cache.get(key)
     # should get cleared from the load state cache
-    assert nil == PDL.peek_load_state(pdl(), key)
+    assert nil == PDL.peek_load_state(Cache.pdl(), key)
   end
 
   test "refresh :ignore failures are ignored (should be handled in callback)" do
-    key = PDLTestGenericImplementation.key_that_returns_ignore_on_refresh
+    key = Implementation.key_that_returns_ignore_on_refresh
 
     # it should load
-    {:ok, _v} = PDLTestGenericCache.get(key)
+    {:ok, _v} = Cache.get(key)
 
-    PDLTestGenericCache.request_load(key)
+    Cache.request_load(key)
 
     # the refresh fixture will remove the existing value
     wait_for(fn -> CacheBackend.get(key) == {:error, :not_found} end)
 
     # fail to refresh
-    assert {:error, :failed} == PDLTestGenericCache.get(key)
+    assert {:error, :failed} == Cache.get(key)
     # should get cleared from the load state cache
-    assert nil == PDL.peek_load_state(pdl(), key)
+    assert nil == PDL.peek_load_state(Cache.pdl(), key)
   end
 end
