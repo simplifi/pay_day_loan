@@ -7,6 +7,7 @@ defmodule PayDayLoan.Support.TestImplementation do
       @behaviour PayDayLoan.Loader
 
       @key_that_shall_be_replaced "key that shall be replaced" 
+      @key_that_loads_too_slowly "key that loads too slowly"
       @key_that_does_not_exist "key that does not exist"
       @key_that_will_not_new "key that will not new"
       @key_that_will_not_refresh "key that will not refresh"
@@ -22,6 +23,11 @@ defmodule PayDayLoan.Support.TestImplementation do
       # this one will get a new pid
       def key_that_shall_be_replaced do
         @key_that_shall_be_replaced
+      end
+
+      # this one will take too long to load
+      def key_that_loads_too_slowly do
+        @key_that_loads_too_slowly
       end
 
       # this one will fail the key cache check
@@ -68,6 +74,11 @@ defmodule PayDayLoan.Support.TestImplementation do
 
       def new(key = @key_that_will_not_new, value) do
         LoadHistory.new(key, value)
+        {:error, :load_failed}
+      end
+      def new(key = @key_that_loads_too_slowly, value) do
+        LoadHistory.new(key, value)
+        :timer.sleep(500)
         {:error, :load_failed}
       end
       def new(key = @key_that_returns_ignore_on_new, value) do

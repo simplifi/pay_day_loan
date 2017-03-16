@@ -315,4 +315,8 @@ defmodule PayDayLoan.Backends.ProcessTest do
       PayDayLoan.CacheGenerator.compile([])
     end
   end
+
+  test "failure callback for processes not found" do
+    assert 1 == Cache.with_pid(1, fn(_) -> 2 end, fn() -> 1 end)
+  end
 end

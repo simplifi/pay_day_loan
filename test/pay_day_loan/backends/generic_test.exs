@@ -238,8 +238,14 @@ defmodule PayDayLoan.Backends.GenericTest do
 
     assert {:ok, v1} == CacheBackend.get(key)
 
+    key2 = 2
+    {:ok, v2} = Cache.get(key2)
+
     # delete on the backend
     CacheBackend.delete(key)
+
+    # the deleted key no longer shows up in reduce results
+    assert [v2] == Cache.values()
 
     assert {:error, :not_found} == Cache.get(key)
     assert nil == PDL.LoadState.peek(Cache.pdl().load_state_manager, key)
@@ -315,5 +321,22 @@ defmodule PayDayLoan.Backends.GenericTest do
     assert {:error, :failed} == Cache.get(key)
     # should get cleared from the load state cache
     assert nil == PDL.peek_load_state(Cache.pdl(), key)
+  end
+
+  test "when a key fails to load before the timeout" do
+    key = Implementation.key_that_loads_too_slowly
+
+    assert {:error, :timed_out} == Cache.get(key)
+  end
+
+  test "working with the load state for lists of keys" do
+    assert [:requested] ==
+      PDL.LoadState.query(Cache.pdl().load_state_manager, [1])
+    assert [:requested, nil] ==
+      PDL.LoadState.peek(Cache.pdl().load_state_manager, [1, 2])
+    assert [:loaded] == 
+      PDL.LoadState.loaded(Cache.pdl().load_state_manager, [2])
+    assert [:failed] == 
+      PDL.LoadState.failed(Cache.pdl().load_state_manager, [1])
   end
 end
