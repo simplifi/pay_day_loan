@@ -3,6 +3,8 @@ defmodule PayDayLoan.EtsBackend do
   ETS-based backend capable of handling raw values, pids, or callbacks.
   """
 
+  @behaviour PayDayLoan.Backend
+
   @doc """
   Setup callback, creates the underlying ETS table
   """
@@ -63,8 +65,8 @@ defmodule PayDayLoan.EtsBackend do
   If the value is a process that is not alive, deletes the entry and returns
   `{:error, :not_found}`.
   """
-  @spec get_value(PayDayLoan.t, PayDayLoan.key) :: {:ok, term} | {:error, :not_found}
-  def get_value(pdl = %PayDayLoan{}, key) do
+  @spec get(PayDayLoan.t, PayDayLoan.key) :: {:ok, term} | {:error, :not_found}
+  def get(pdl = %PayDayLoan{}, key) do
     case lookup(pdl, key) do
       {:ok, pre_resolve_value} -> resolve_value(pre_resolve_value, key, pdl)
       {:error, :not_found} -> {:error, :not_found}
@@ -95,8 +97,8 @@ defmodule PayDayLoan.EtsBackend do
   @doc """
   Remove a key from cache
   """
-  @spec delete_key(PayDayLoan.t, PayDayLoan.key) :: :ok
-  def delete_key(%PayDayLoan{backend_id: backend_id}, key) do
+  @spec delete(PayDayLoan.t, PayDayLoan.key) :: :ok
+  def delete(%PayDayLoan{backend_id: backend_id}, key) do
     true = :ets.delete(backend_id, key)
     :ok
   end

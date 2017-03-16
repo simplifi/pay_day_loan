@@ -204,7 +204,7 @@ defmodule PayDayLoan do
   end
 
   def peek(pdl = %PayDayLoan{}, key) do
-    pdl.backend.get_value(pdl, key)
+    pdl.backend.get(pdl, key)
   end
 
   @doc """
@@ -351,7 +351,7 @@ defmodule PayDayLoan do
   """
   @spec uncache_key(t, key) :: :ok
   def uncache_key(pdl = %PayDayLoan{}, key) do
-    :ok = pdl.backend.delete_key(pdl, key)
+    :ok = pdl.backend.delete(pdl, key)
     :ok = LoadState.unload(pdl.load_state_manager, key)
     :ok = KeyCache.remove(pdl.key_cache, key)
   end
@@ -412,7 +412,7 @@ defmodule PayDayLoan do
   # if we're already loaded, we just have to grab the pid
   #    this is hopefully the most common path
   defp get(pdl, key, :loaded, try_num) do
-    case pdl.backend.get_value(pdl, key) do
+    case pdl.backend.get(pdl, key) do
       # if the value was removed from the backend, we should remove it from
       # the load state and try again
       {:error, :not_found} ->
@@ -420,7 +420,7 @@ defmodule PayDayLoan do
         get(pdl, key, peek_load_state(pdl, key), try_num - 1)
       {:ok, value} -> {:ok, value}
     end
-    pdl.backend.get_value(pdl, key)
+    pdl.backend.get(pdl, key)
   end
   # if the key is loading, just dwell and try again
   defp get(pdl, key, :loading, try_num) do
