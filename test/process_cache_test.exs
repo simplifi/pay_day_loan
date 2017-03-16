@@ -149,7 +149,7 @@ defmodule ProcessCacheTest do
   test "basic integration test" do
     pdl = PDLTestProcessCache.pdl
 
-    assert 0 == PDL.CacheStateManager.size(pdl)
+    assert 0 == PDL.EtsBackend.size(pdl)
 
     assert {:error, :not_found} == PDL.peek_pid(pdl, 1)
 

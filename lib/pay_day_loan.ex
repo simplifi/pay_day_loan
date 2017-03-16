@@ -9,7 +9,7 @@ defmodule PayDayLoan do
     backend_id: nil,
     load_state_manager: nil,
     cache_monitor: nil,
-    backend: PayDayLoan.CacheStateManager,
+    backend: PayDayLoan.EtsBackend,
     key_cache: nil,
     load_worker: nil,
     callback_module: nil,
@@ -100,7 +100,7 @@ defmodule PayDayLoan do
     Create a new cache element.  For example, this may call through
     to a GenServer.start_link or Supervisor.start_child.
 
-    If a pid is returned, it will be added to the CacheStateManager's ETS table.
+    If a pid is returned, it will be added to the EtsBackend's ETS table.
     """
     @callback new(key :: PayDayLoan.key, load_datum :: PayDayLoan.load_datum) ::
       {:ok, pid} | {:error, term} | :ignore
@@ -111,7 +111,7 @@ defmodule PayDayLoan do
     choose to update the state of the incoming pid or kill that pid and replace
     it with a new one.
 
-    If a pid is returned, the CacheStateManager's ETS table is updated with that
+    If a pid is returned, the EtsBackend's ETS table is updated with that
     pid.
     """
     @callback refresh(
@@ -129,6 +129,17 @@ defmodule PayDayLoan do
     skip key caching.
     """
     @callback key_exists?(key :: PayDayLoan.key) :: boolean
+  end
+
+  defmodule Backend do
+    @callback setup(PayDayLoan.t) :: :ok
+    @callback reduce(PayDayLoan.t, term, (({PayDayLoan.key, term}) -> term)) ::  term
+    @callback size(PayDayLoan.t) :: non_neg_integer
+    @callback keys(PayDayLoan.t) :: [PayDayLoan.key]
+    @callback values(PayDayLoan.t) :: [term]
+    @callback get(PayDayLoan.t, PayDayLoan.key) :: {:ok, term} | {:error, :not_found}
+    @callback put(PayDayLoan.t, PayDayLoan.key, term) :: :ok
+    @callback delete(PayDayLoan.t, PayDayLoan.key) :: :ok
   end
 
   alias PayDayLoan.LoadState
@@ -356,7 +367,7 @@ defmodule PayDayLoan do
       backend_id:          String.to_atom(name <> "_backend"),
       load_state_manager:  String.to_atom(name <> "_load_state_manager"),
       cache_monitor:       String.to_atom(name <> "_cache_monitor"),
-      backend:             PayDayLoan.CacheStateManager,
+      backend:             PayDayLoan.EtsBackend,
       key_cache:           String.to_atom(name <> "_key_cache"),
       load_worker:         String.to_atom(name <> "_load_worker"),
       supervisor_name:     String.to_atom(name <> "_supervisor"),

@@ -1,11 +1,12 @@
-defmodule PayDayLoan.CacheStateManager do
+defmodule PayDayLoan.EtsBackend do
   @moduledoc """
-  Keeps track of which keys are cached.
+  ETS-based backend capable of handling raw values, pids, or callbacks.
   """
 
-  # this should get called by the supervisor during startup
-  @doc false
-  @spec setup(PayDayLoan.t) :: []
+  @doc """
+  Setup callback, creates the underlying ETS table
+  """
+  @spec setup(PayDayLoan.t) :: :ok
   def setup(%PayDayLoan{backend_id: backend_id}) do
     _ = :ets.new(
       backend_id,
@@ -83,17 +84,6 @@ defmodule PayDayLoan.CacheStateManager do
   end
 
   @doc """
-  Look up a pid without checking if the pid is alive
-  """
-  @spec lookup(PayDayLoan.t, PayDayLoan.key) :: {:ok, pid} | {:error, :not_found}
-  def lookup(%PayDayLoan{backend_id: backend_id}, key) do
-    case :ets.lookup(backend_id, key) do
-      [{_key, pid}] -> {:ok, pid}
-      [] -> {:error, :not_found}
-    end
-  end
-
-  @doc """
   Remove a value from cache
   """
   @spec delete_value(PayDayLoan.t, term) :: :ok
@@ -109,6 +99,13 @@ defmodule PayDayLoan.CacheStateManager do
   def delete_key(%PayDayLoan{backend_id: backend_id}, key) do
     true = :ets.delete(backend_id, key)
     :ok
+  end
+
+  defp lookup(%PayDayLoan{backend_id: backend_id}, key) do
+    case :ets.lookup(backend_id, key) do
+      [{_key, pid}] -> {:ok, pid}
+      [] -> {:error, :not_found}
+    end
   end
 
   defp resolve_value(cb, key, _pdl) when is_function(cb, 1) do
