@@ -21,7 +21,7 @@ defmodule PayDayLoan.Supervisor do
   end
 
   # Supervisor callback
-  @spec init([PayDayLoan.t]) :: 
+  @spec init([PayDayLoan.t]) ::
   {:ok, {:supervisor.sup_flags, [Supervisor.Spec.spec]}}
   def init([pdl]) do
     setup(pdl)

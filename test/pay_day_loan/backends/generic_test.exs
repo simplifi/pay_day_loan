@@ -339,4 +339,17 @@ defmodule PayDayLoan.Backends.GenericTest do
     assert [:failed] == 
       PDL.LoadState.failed(Cache.pdl().load_state_manager, [1])
   end
+
+  test "cache generator exports all of the desired shortcut functions" do
+    base_functions = PayDayLoan.__info__(:functions)
+    wanted_functions = Enum.reject(
+      base_functions,
+      fn({f, _}) ->
+        Enum.member?([:__struct__, :merge_defaults], f)
+      end)
+    for {f, arity} <- wanted_functions do
+      assert :erlang.function_exported(Cache, f, arity - 1),
+        "Function #{inspect f} not exported"
+    end
+  end
 end

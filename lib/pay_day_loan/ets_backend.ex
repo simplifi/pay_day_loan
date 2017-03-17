@@ -9,9 +9,9 @@ defmodule PayDayLoan.EtsBackend do
   Setup callback, creates the underlying ETS table
   """
   @spec setup(PayDayLoan.t) :: :ok
-  def setup(%PayDayLoan{backend_id: backend_id}) do
+  def setup(%PayDayLoan{backend_payload: backend_payload}) do
     _ = :ets.new(
-      backend_id,
+      backend_payload,
       [:public, :named_table, {:read_concurrency, true}]
     )
     :ok
@@ -20,8 +20,9 @@ defmodule PayDayLoan.EtsBackend do
   @doc """
   Perform Enum.reduce on the ETS table
   """
-  @spec reduce(PayDayLoan.t, term, (({PayDayLoan.key, pid}, term) -> term)) :: term
-  def reduce(pdl = %PayDayLoan{backend_id: backend_id}, acc0, reducer)
+  @spec reduce(PayDayLoan.t, term, (({PayDayLoan.key, pid}, term) -> term))
+  :: term
+  def reduce(pdl = %PayDayLoan{backend_payload: backend_payload}, acc0, reducer)
   when is_function(reducer, 2) do
     :ets.foldl(
       fn({k, v}, acc) ->
@@ -31,7 +32,7 @@ defmodule PayDayLoan.EtsBackend do
         end
       end,
       acc0,
-      backend_id
+      backend_payload
     )
   end
 
@@ -39,8 +40,8 @@ defmodule PayDayLoan.EtsBackend do
   Returns the number of cached keys
   """
   @spec size(PayDayLoan.t) :: non_neg_integer
-  def size(%PayDayLoan{backend_id: backend_id}) do
-    :ets.info(backend_id, :size)
+  def size(%PayDayLoan{backend_payload: backend_payload}) do
+    :ets.info(backend_payload, :size)
   end
 
   @doc """
@@ -77,8 +78,8 @@ defmodule PayDayLoan.EtsBackend do
   Add a value to the cache and monitor it if it is a pid.
   """
   @spec put(PayDayLoan.t, PayDayLoan.key, term) :: :ok
-  def put(pdl = %PayDayLoan{backend_id: backend_id}, key, value) do
-    :ets.insert(backend_id, {key, value})
+  def put(pdl = %PayDayLoan{backend_payload: backend_payload}, key, value) do
+    :ets.insert(backend_payload, {key, value})
     if is_pid(value) do
       GenServer.cast(pdl.cache_monitor, {:monitor, value})
     end
@@ -89,8 +90,8 @@ defmodule PayDayLoan.EtsBackend do
   Remove a value from cache
   """
   @spec delete_value(PayDayLoan.t, term) :: :ok
-  def delete_value(%PayDayLoan{backend_id: backend_id}, value) do
-    true = :ets.match_delete(backend_id, {:'_', value})
+  def delete_value(%PayDayLoan{backend_payload: backend_payload}, value) do
+    true = :ets.match_delete(backend_payload, {:'_', value})
     :ok
   end
 
@@ -98,13 +99,13 @@ defmodule PayDayLoan.EtsBackend do
   Remove a key from cache
   """
   @spec delete(PayDayLoan.t, PayDayLoan.key) :: :ok
-  def delete(%PayDayLoan{backend_id: backend_id}, key) do
-    true = :ets.delete(backend_id, key)
+  def delete(%PayDayLoan{backend_payload: backend_payload}, key) do
+    true = :ets.delete(backend_payload, key)
     :ok
   end
 
-  defp lookup(%PayDayLoan{backend_id: backend_id}, key) do
-    case :ets.lookup(backend_id, key) do
+  defp lookup(%PayDayLoan{backend_payload: backend_payload}, key) do
+    case :ets.lookup(backend_payload, key) do
       [{_key, pid}] -> {:ok, pid}
       [] -> {:error, :not_found}
     end

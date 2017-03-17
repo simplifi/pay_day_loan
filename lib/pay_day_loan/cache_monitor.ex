@@ -40,7 +40,7 @@ defmodule PayDayLoan.CacheMonitor do
         (_, acc) -> acc
       end,
       %{},
-      pdl.backend_id
+      pdl.backend_payload
     )
 
     {:ok, %State{pdl: pdl, monitors: monitors}}

@@ -49,9 +49,9 @@ defmodule PayDayLoan.CacheGenerator do
   defp generate_shortcuts do
     quote location: :keep do
       @doc """
-      Synchronous pid fetcher
+      Wraps `PayDayLoan.get_pid/2`
 
-      Wraps PayDayLoan.get_pid/2
+      This is a legacy API method and may be deprecated.  Use `get/1`.
       """
       @spec get_pid(key :: PayDayLoan.key) ::
       {:ok, pid} | {:error, PayDayLoan.error}
@@ -59,54 +59,87 @@ defmodule PayDayLoan.CacheGenerator do
         PayDayLoan.get_pid(pdl(), key)
       end
 
+      @doc "Wraps `PayDayLoan.get/2`"
+      @spec get(PayDayLoan.key) :: {:ok, term} | {:error, :not_found}
       def get(key) do
         PayDayLoan.get(pdl(), key)
       end
 
-      @doc """
-      Returns the number of keys in cache
+      @doc "Wraps `PayDayLoan.peek/2`"
+      @spec peek(PayDayLoan.key) :: {:ok, term} | {:error, :not_found}
+      def peek(key), do: PayDayLoan.peek(pdl(), key)
 
-      Wraps PayDayLoan.cache_size/1
+      @doc """
+      Wraps `PayDayLoan.peek_pid/2`
+
+      This is a legacy API method and may be deprecated.  Use `peek/1`.
       """
-      @spec size :: non_neg_integer
-      def size do
-        PayDayLoan.cache_size(pdl())
+      @spec peek_pid(PayDayLoan.key) :: {:ok, pid} | {:error, :not_found}
+      def peek_pid(key), do: PayDayLoan.peek_pid(pdl(), key)
+
+      @doc "Wraps `PayDayLoan.peek_load_state/2`"
+      @spec peek_load_state(PayDayLoan.key) :: nil | PayDayLoan.LoadState.t
+      def peek_load_state(key), do: PayDayLoan.peek_load_state(pdl(), key)
+
+      @doc "Wraps `PayDayLoan.query_load_state/2`"
+      @spec query_load_state(PayDayLoan.key) :: PayDayLoan.LoadState.t
+      def query_load_state(key), do: PayDayLoan.query_load_state(pdl(), key)
+
+      @doc "Wraps `PayDayLoan.supervisor_specification/1`"
+      @spec supervisor_specification() :: Supervisor.Spec.spec
+      def supervisor_specification do
+        PayDayLoan.supervisor_specification(pdl())
       end
 
-      @doc """
-      Request asynchronous load of one or more keys
+      @doc "Wraps `PayDayLoan.uncache_key/2`"
+      @spec uncache_key(PayDayLoan.key) :: :ok
+      def uncache_key(key), do: PayDayLoan.uncache_key(pdl(), key)
 
-      Wraps PayDayLoan.request_load/2
-      """
+      @doc "Wraps `PayDayLoan.with_value/4`"
+      @spec with_value(PayDayLoan.key, ((term) -> term), (() -> term)) :: term
+      def with_value(
+        key,
+        found_callback,
+        not_found_callback \\ fn -> {:error, :not_found} end
+      ) do
+        PayDayLoan.with_value(pdl(), key, found_callback, not_found_callback)
+      end
+
+      @doc "Wraps `PayDayLoan.size/1`"
+      @spec size :: non_neg_integer
+      def size do
+        PayDayLoan.size(pdl())
+      end
+
+      @doc "Wraps `PayDayLoan.request_load/2`"
       @spec request_load(PayDayLoan.key | [PayDayLoan.key]) :: :ok
       def request_load(key_or_keys) do
         PayDayLoan.request_load(pdl(), key_or_keys)
       end
 
-      @doc """
-      Returns a list of all keys in cache
-      """
+      @doc "Wraps `PayDayLoan.keys/1`"
       @spec keys :: [PayDayLoan.key]
       def keys do
         PayDayLoan.keys(pdl())
       end
 
       @doc """
-      Returns a list of pids in cache
+      Wraps `PayDayLoan.pids/1`
+
+      This is a legacy API method and may be deprecated.  Use `values/0`
       """
       @spec pids :: [pid]
       def pids do
         PayDayLoan.pids(pdl())
       end
 
+      @doc "Wraps `PayDayLoan.values/1`"
       @spec values :: [term]
       def values do
         PayDayLoan.values(pdl())
       end
 
-      @doc """
-      Perform Enum.reduce/3 over all {key, pid} pairs
-      """
+      @doc "Wraps `PayDayLoan.reduce/3`"
       @spec reduce(term, (({PayDayLoan.key, pid}, term) -> term)) :: term
       def reduce(acc0, reducer)
       when is_function(reducer, 2) do
@@ -114,10 +147,9 @@ defmodule PayDayLoan.CacheGenerator do
       end
 
       @doc """
-      Execute a callback with a pid if it is found.
+      Wraps `PayDayLOan.with_pid/4`
 
-      If no pid is found, not_found_callback is executed.  By default,
-      not_found_callback returns `{:error, :not_found}`.
+      This is a legacy API method and may be deprecated.  Use `with_value/3`
       """
       @spec with_pid(
         PayDayLoan.key,
@@ -132,10 +164,7 @@ defmodule PayDayLoan.CacheGenerator do
         PayDayLoan.with_pid(pdl(), key, found_callback, not_found_callback)
       end
 
-      @doc """
-      Manually add a single key/pid to the cache.  Fails if the key is
-      already in cache with a different pid.
-      """
+      @doc "Wraps `PayDayLoan.cache/3`"
       @spec cache(PayDayLoan.key, pid) :: :ok | {:error, pid}
       def cache(key, pid) do
         PayDayLoan.cache(pdl(), key, pid)

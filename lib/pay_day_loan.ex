@@ -6,7 +6,7 @@ defmodule PayDayLoan do
   @default_load_wait_msec 500
 
   defstruct(
-    backend_id: nil,
+    backend_payload: nil,
     load_state_manager: nil,
     cache_monitor: nil,
     backend: PayDayLoan.EtsBackend,
@@ -22,9 +22,13 @@ defmodule PayDayLoan do
   @typedoc """
   Struct encapsulating a PDL cache.
 
-  * `backend_id` - ETS table id for cache state table and
-     registration name for the monitoring GenServer.
+  * `backend` - Implementation of the Backend behaviour -
+    defaults to PayDayLoan.EtsBackend.
+  * `backend_payload` - Arbitrary payload for the backend - defaults to the
+    ETS table id for the ETS backend.
   * `load_state_manager` - ETS table id for load state table.
+  * `cache_monitor` - Registration name for the monitor process, or false if
+    no monitor should be started.
   * `key_cache` - ETS table id for key cache table.
   * `load_worker` - Registration name for the load worker GenServer.
   * `callback_module` - Module implementing the PayDayLoan.Loader behaviour.
@@ -33,11 +37,12 @@ defmodule PayDayLoan do
      Default 10
   * `load_wait_msec` - Amount of time to wait between checking load state.
      Default 500
+  * `supervisor_name` - Registration name for the supervisor.
   """
   @type t :: %PayDayLoan{
-    backend_id: atom,
+    backend_payload: atom,
     load_state_manager: atom,
-    cache_monitor: atom,
+    cache_monitor: atom | false,
     backend: atom,
     key_cache: atom,
     load_worker: atom,
@@ -66,20 +71,37 @@ defmodule PayDayLoan do
   @type load_datum :: term
 
   @typedoc """
-  Error values that may be returned from get_pid/2
+  Error values that may be returned from get/2
 
   * `:not_found` - The key is not found as per the key_exists? loader callback
   * `:timed_out` - Timed out waiting for the value to load.
   * `:failed` - Either the new or refresh callback failed or returned `:ignore`.
 
-  Note - failure state clears when the get_pid function returns.  Further
-  calls to get_pid will retry a load.
+  Note - failure state clears when the get function returns.  Further
+  calls to get will retry a load.
   """
   @type error :: :not_found | :timed_out | :failed
 
   defmodule Loader do
     @moduledoc """
     Defines the PDL loader behaviour.
+
+    The loader is responsible for fetching a batch of data (`bulk_load/1`) from
+    the cache's source (e.g., a database).  For each element that is fetched,
+    we check if there is an existing element in the cache backend.
+
+    If no existing element is found for a key, we call `new/2` with the
+    corresponding key and value.  This gives the loader an opportunity to alter
+    what is stored in the backend from what is returned by the loader.  For
+    example, we may be using a process backend and all we need to store is the
+    pid.
+
+    If an existing value is found for a key, we call `refresh/3` with the
+    existing backend value, the key, and the load datum.  For example, with a
+    process backend this may involve making a GenServer or Agent update call
+    before returning the pid to the backend.
+
+    The `key_exists?/1` function is a hook for the key cache.
     """
 
     @doc """
@@ -97,28 +119,40 @@ defmodule PayDayLoan do
       [{PayDayLoan.key, PayDayLoan.load_datum}]
 
     @doc """
-    Create a new cache element.  For example, this may call through
-    to a GenServer.start_link or Supervisor.start_child.
+    Create a new cache element before sending it to the backend.
 
-    If a pid is returned, it will be added to the EtsBackend's ETS table.
+    For example, this may create a process and the resulting pid is what is
+    actually stored in the backend, or it may simply manipulate the load datum
+    before it is stored.  To store the load datum directly in the backend,
+    just return `{:ok, load_datum}`.  To signal an error which will cause the
+    load to fail for this key, return `{:error, <error payload>}`.
     """
     @callback new(key :: PayDayLoan.key, load_datum :: PayDayLoan.load_datum) ::
-      {:ok, pid} | {:error, term} | :ignore
+      {:ok, term} | {:error, term} | :ignore
 
     @doc """
-    Update a cache element.  Depending on your implementation, the returned
-    pid may or may not be equal to the incoming pid.  That is, you could
-    choose to update the state of the incoming pid or kill that pid and replace
-    it with a new one.
+    Update a cache element before storing it.
 
-    If a pid is returned, the EtsBackend's ETS table is updated with that
-    pid.
+    This is called when a load occurs for a key that already has a value in
+    the cache.  You can use this callback to resolve the differences or to
+    update the value before sending it on to the backend.  For example, with
+    a process-based cache (e.g. using `PayDayLoan.EtsBackend`), the
+    `existing_value` is the backing processes pid and you may need to call
+    something like `Agent.update(existing_value, key, <update function>)` and
+    return `existing_value` unchanged (since the same pid will still be stored
+    on the backend).
+
+    To pass the load datum directly through to the backend, return
+    `{:ok, load_datum}`.  To signal an error, return
+    `{:error, <error payload>}`.  To ignore this datum, return `:ignore`.  In
+    both the `:ignore` and `:error` cases, the key will not be reloaded until
+    it is requested again.
     """
     @callback refresh(
-      existing_pid :: pid,
+      existing_value :: term,
       key :: PayDayLoan.key,
       load_datum :: PayDayLoan.load_datum
-    ) :: {:ok, pid} | {:error, term} | :ignore
+    ) :: {:ok, term} | {:error, term} | :ignore
 
     @doc """
     Should return true if a key exists in the cache's source.  This should be a
@@ -132,18 +166,75 @@ defmodule PayDayLoan do
   end
 
   defmodule Backend do
+    @moduledoc """
+    Defines the PDL backend behaviour.
+
+    The backend is responsible for allowing us to access the cached value
+    for a given key.  PayDayLoan's `EtsBackend` module is used by default, and
+    is built with a process cache in mind.  You could use the `Backend`
+    behaviour to implement, for example, a Redis or mnesia backend.
+    """
+
+    @doc """
+    Called during supervisor initialization - use this callback to initialize
+    your backend if needed.  Must return `:ok`.
+    """
     @callback setup(PayDayLoan.t) :: :ok
-    @callback reduce(PayDayLoan.t, term, (({PayDayLoan.key, term}) -> term)) ::  term
+
+    @doc """
+    Should execute a reduce operation over the key/value pairs in the cache.
+
+    The reducer function should take arguments in the form
+    `({key, value}, accumulator)` and return the new accumulator value - i.e.,
+    it should operate as `Enum.reduce/3` would when given a map.
+    """
+    @callback reduce(
+      PayDayLoan.t,
+      acc0 :: term,
+      reducer :: (({PayDayLoan.key, term}, term) -> term)) ::  term
+
+    @doc """
+    Should return the number of keys in the cache
+    """
     @callback size(PayDayLoan.t) :: non_neg_integer
+
+    @doc """
+    Should return a list of keys in the cache
+    """
     @callback keys(PayDayLoan.t) :: [PayDayLoan.key]
+
+    @doc """
+    Should return a list of values in the cache
+    """
     @callback values(PayDayLoan.t) :: [term]
-    @callback get(PayDayLoan.t, PayDayLoan.key) :: {:ok, term} | {:error, :not_found}
+
+    @doc """
+    Retrieve a value from the cache
+
+    Should return `{:error, :not_found}` if the value is not found and
+    `{:ok, value}` otherwise.
+    """
+    @callback get(PayDayLoan.t, PayDayLoan.key)
+    :: {:ok, term} | {:error, :not_found}
+
+    @doc """
+    Insert a value into the cache
+
+    Must return `:ok`
+    """
     @callback put(PayDayLoan.t, PayDayLoan.key, term) :: :ok
+
+    @doc """
+    Delete a key from the cache
+
+    Must return `:ok`
+    """
     @callback delete(PayDayLoan.t, PayDayLoan.key) :: :ok
   end
 
-  alias PayDayLoan.LoadState
+  alias PayDayLoan.CacheGenerator
   alias PayDayLoan.KeyCache
+  alias PayDayLoan.LoadState
 
   @doc """
   Mixin support for generating a cache.
@@ -159,16 +250,8 @@ defmodule PayDayLoan do
   Other keys of the `%PayDayLoan{}` struct can be passed in as options to
   override the defaults.
 
-  Also defines a few pass-through convenience functions.
-
-  * `MyCache.get_pid/1`
-  * `MyCache.request_load/1`
-  * `MyCache.size/0`
-  * `MyCache.keys/0`
-  * `MyCache.pids/0`
-  * `MyCache.reduce/2`
-  * `MyCache.with_pid/3`
-  # `MyCache.cache/3`
+  Also defines pass-through convenience functions for every function in
+  `PayDayLoan`.
   """
   defmacro __using__(opts) do
     # generates the pdl config and wrapper functions
@@ -176,7 +259,7 @@ defmodule PayDayLoan do
     #   a %PayDayLoan{} has
 
     # delegate to macro implementation module
-    PayDayLoan.CacheGenerator.compile(opts)
+    CacheGenerator.compile(opts)
   end
 
   @doc """
@@ -196,6 +279,8 @@ defmodule PayDayLoan do
 
   @doc """
   Check for cached pid, but do not request a load
+
+  This is a legacy API method and may be deprecated.  Use `peek/2`.
   """
   @spec peek_pid(pdl :: t, key :: PayDayLoan.key)
   :: {:ok, pid} | {:error, :not_found}
@@ -203,6 +288,10 @@ defmodule PayDayLoan do
     peek(pdl, key)
   end
 
+  @doc """
+  Check for a cached value, but do not request a load
+  """
+  @spec peek(t, key) :: {:ok, term} | {:error, :not_found}
   def peek(pdl = %PayDayLoan{}, key) do
     pdl.backend.get(pdl, key)
   end
@@ -218,8 +307,8 @@ defmodule PayDayLoan do
   @doc """
   Check load state, request load if not loaded or loading
 
-  Does not ping the load worker - load will not happen until
-  the next ping.
+  Does not ping the load worker.  A load will not happen until
+  the next ping.  Use `request_load/2` to request load and trigger a load ping.
   """
   @spec query_load_state(pdl :: t, key) :: LoadState.t
   def query_load_state(pdl = %PayDayLoan{}, key) do
@@ -241,12 +330,19 @@ defmodule PayDayLoan do
   @doc """
   Synchronously get the pid for a key, attempting to load it if
   it is not already loaded.
+
+  This is a legacy API method and may be deprecated.  Use `get/2`.
   """
   @spec get_pid(pdl :: t, key) :: {:ok, pid} | {:error, error}
   def get_pid(pdl = %PayDayLoan{}, key) do
     get(pdl, key)
   end
 
+  @doc """
+  Synchronously get the value for a key, attempting to load it if it is not
+  alraedy loaded.
+  """
+  @spec get(pdl :: t, key) :: {:ok, term} | {:error, error}
   def get(pdl = %PayDayLoan{}, key) do
     get(pdl, key, peek_load_state(pdl, key), pdl.load_num_tries)
   end
@@ -254,8 +350,8 @@ defmodule PayDayLoan do
   @doc """
   Returns the number of keys in the given cache
   """
-  @spec cache_size(pdl :: t) :: non_neg_integer
-  def cache_size(pdl = %PayDayLoan{}) do
+  @spec size(pdl :: t) :: non_neg_integer
+  def size(pdl = %PayDayLoan{}) do
     pdl.backend.size(pdl)
   end
 
@@ -275,6 +371,10 @@ defmodule PayDayLoan do
     values(pdl)
   end
 
+  @doc """
+  Return all of the values stored in the backend
+  """
+  @spec values(pdl :: t) :: [term]
   def values(pdl = %PayDayLoan{}) do
     pdl.backend.values(pdl)
   end
@@ -296,6 +396,8 @@ defmodule PayDayLoan do
 
   If no pid is found, not_found_callback is executed.  By default,
   not_found_callback returns `{:error, :not_found}`.
+
+  This is a legacy API method and may be deprecated.  Use `with_value/4`.
   """
   @spec with_pid(
     t,
@@ -312,7 +414,19 @@ defmodule PayDayLoan do
     with_value(pdl, key, found_callback, not_found_callback)
   end
 
-  def with_value(pdl, key, found_callback, not_found_callback \\ fn -> {:error, :not_found} end) do
+  @doc """
+  Execute a callback with a value if it is found.
+
+  If no value is found, `not_found_callback` is executed.  By default,
+  the `not_found_callback` is a function that returns `{:error, :not_found}`.
+  """
+  @spec with_value(t, PayDayLoan.key, ((term) -> term), (() -> term)) :: term
+  def with_value(
+    pdl,
+    key,
+    found_callback,
+    not_found_callback \\ fn -> {:error, :not_found} end
+  ) do
     case peek(pdl, key) do
       {:ok, value} -> found_callback.(value)
       {:error, :not_found} -> not_found_callback.()
@@ -364,7 +478,7 @@ defmodule PayDayLoan do
     name = callback_module_to_name_string(callback_module)
 
     defaults = %PayDayLoan{
-      backend_id:          String.to_atom(name <> "_backend"),
+      backend_payload:     String.to_atom(name <> "_backend"),
       load_state_manager:  String.to_atom(name <> "_load_state_manager"),
       cache_monitor:       String.to_atom(name <> "_cache_monitor"),
       backend:             PayDayLoan.EtsBackend,
