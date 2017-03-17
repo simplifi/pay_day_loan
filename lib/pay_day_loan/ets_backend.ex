@@ -1,6 +1,21 @@
 defmodule PayDayLoan.EtsBackend do
   @moduledoc """
   ETS-based backend capable of handling raw values, pids, or callbacks.
+
+  This is the default backend used by PayDayLoan and is designed for storing
+  process ids.  However, it can be used with raw values or callback functions.
+
+  With pids, special care is taken to keep the cache state consistent with
+  the "alive" state of the processes.  If a process is found to be dead, the
+  key is removed from cache.  The `PayDayLoan.CacheMonitor` process monitors
+  pids, and we check for alive-ness whenever we resolve a value.
+
+  If a callback is stored, then the callback is executed whenever we attempt
+  to resolve a value - e.g., on `get` or `reduce` or `values` calls.
+
+  The functions in this module are documented only to aid in understanding
+  how the default backend works.  They should not be called directly - only
+  through the PDL API.
   """
 
   @behaviour PayDayLoan.Backend

@@ -2,7 +2,10 @@ defmodule PayDayLoan.CacheMonitor do
   @moduledoc """
   Monitor for process registry caches.
 
-  Removes pids from the cache if the corresponding process dies.
+  This is built to work with the supplied `PayDayLoan.EtsBackend` backend, for
+  which it monitors pids and removes them from cache if the pid dies.
+
+  This can be disabled by setting `cache_monitor: false` in the PDL setup.
   """
 
   use GenServer
@@ -28,7 +31,7 @@ defmodule PayDayLoan.CacheMonitor do
   def init([pdl]) do
     # monitor all existing pids, clean up if they have died
     #   (could happen when this process restarts)
-    monitors = :ets.foldl(
+    monitors = Enum.reduce(pdl.backend.values(pdl), %{},
       fn
         ({_k, pid}, acc) when is_pid(pid) ->
           if Process.alive?(pid) do
@@ -38,9 +41,7 @@ defmodule PayDayLoan.CacheMonitor do
             Map.delete(acc, pid)
           end
         (_, acc) -> acc
-      end,
-      %{},
-      pdl.backend_payload
+      end
     )
 
     {:ok, %State{pdl: pdl, monitors: monitors}}
