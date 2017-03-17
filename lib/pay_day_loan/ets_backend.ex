@@ -11,7 +11,9 @@ defmodule PayDayLoan.EtsBackend do
   pids, and we check for alive-ness whenever we resolve a value.
 
   If a callback is stored, then the callback is executed whenever we attempt
-  to resolve a value - e.g., on `get` or `reduce` or `values` calls.
+  to resolve a value - e.g., on `get` or `reduce` or `values` calls.  The
+  callback must return a tuple with `{:ok, value}` on success or
+  `{:error, :not_found}` on failure.
 
   The functions in this module are documented only to aid in understanding
   how the default backend works.  They should not be called directly - only
