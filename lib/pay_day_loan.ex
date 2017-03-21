@@ -1,6 +1,8 @@
 defmodule PayDayLoan do
   @moduledoc File.read!(Path.expand("../README.md", __DIR__))
 
+  require Logger
+
   @default_batch_size 1000
   @default_load_num_tries 10
   @default_load_wait_msec 500
@@ -285,6 +287,7 @@ defmodule PayDayLoan do
   @spec peek_pid(pdl :: t, key :: PayDayLoan.key)
   :: {:ok, pid} | {:error, :not_found}
   def peek_pid(pdl = %PayDayLoan{}, key) do
+    Logger.warn("_pid functions will be deprecated in the next release.")
     peek(pdl, key)
   end
 
@@ -335,6 +338,7 @@ defmodule PayDayLoan do
   """
   @spec get_pid(pdl :: t, key) :: {:ok, pid} | {:error, error}
   def get_pid(pdl = %PayDayLoan{}, key) do
+    Logger.warn("_pid functions will be deprecated in the next release.")
     get(pdl, key)
   end
 
@@ -411,6 +415,7 @@ defmodule PayDayLoan do
         found_callback,
         not_found_callback \\ fn -> {:error, :not_found} end
       ) do
+    Logger.warn("_pid functions will be deprecated in the next release.")
     with_value(pdl, key, found_callback, not_found_callback)
   end
 

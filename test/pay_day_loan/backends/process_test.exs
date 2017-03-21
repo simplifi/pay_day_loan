@@ -49,7 +49,7 @@ defmodule PayDayLoan.Backends.ProcessTest do
 
     assert 0 == Cache.pdl().backend.size(Cache.pdl())
 
-    assert {:error, :not_found} == PDL.peek_pid(Cache.pdl(), key)
+    assert {:error, :not_found} == PDL.peek(Cache.pdl(), key)
     assert :requested == PDL.query_load_state(Cache.pdl(), key)
 
     GenServer.cast(Cache.pdl().load_worker, :ping)
@@ -58,8 +58,8 @@ defmodule PayDayLoan.Backends.ProcessTest do
     assert :loaded == PDL.query_load_state(Cache.pdl(), key)
     assert get_result == PDL.peek(Cache.pdl(), key)
 
-    {:ok, pid} = Cache.get_pid(key)
-    assert {:ok, pid} == PDL.peek_pid(Cache.pdl(), key)
+    {:ok, pid} = Cache.get(key)
+    assert {:ok, pid} == PDL.peek(Cache.pdl(), key)
 
     assert [{key, key}] == Agent.get(pid, fn(v) -> v end)
 
@@ -72,7 +72,7 @@ defmodule PayDayLoan.Backends.ProcessTest do
     tasks = (1..n)
     |> Enum.map(fn(ix) ->
       Task.async(fn ->
-        {:ok, _pid} = Cache.get_pid(ix)
+        {:ok, _pid} = Cache.get(ix)
       end)
     end)
 
@@ -92,8 +92,8 @@ defmodule PayDayLoan.Backends.ProcessTest do
   test "refreshing a cache element" do
     replaced_key = Implementation.key_that_shall_be_replaced
 
-    {:ok, pid1} = Cache.get_pid(1)
-    {:ok, pid2} = Cache.get_pid(replaced_key)
+    {:ok, pid1} = Cache.get(1)
+    {:ok, pid2} = Cache.get(replaced_key)
 
     news = LoadHistory.news
     assert 2 == length(news)
@@ -111,10 +111,10 @@ defmodule PayDayLoan.Backends.ProcessTest do
       end
     )
 
-    assert {:ok, pid1} == Cache.get_pid(1)
+    assert {:ok, pid1} == Cache.get(1)
     assert [{1, 1}, {1, 1}] == Agent.get(pid1, &(&1))
 
-    {:ok, pid2_new} = Cache.get_pid(replaced_key)
+    {:ok, pid2_new} = Cache.get(replaced_key)
     assert pid2_new != pid2
     assert [{replaced_key, replaced_key}] == Agent.get(pid2_new, &(&1))
 
@@ -130,7 +130,7 @@ defmodule PayDayLoan.Backends.ProcessTest do
   test "requesting a key that is in key cache but fails to load" do
     key = Implementation.key_that_shall_not_be_loaded
 
-    assert {:error, :failed} == Cache.get_pid(key)
+    assert {:error, :failed} == Cache.get(key)
     assert [{:loaded, [key]}] == LoadHistory.loads
     assert nil == PDL.LoadState.peek(Cache.pdl().load_state_manager, key)
     # we hold onto the knowledge that the key exists
@@ -140,7 +140,7 @@ defmodule PayDayLoan.Backends.ProcessTest do
   test "requesting a key that does not exist" do
     key = Implementation.key_that_does_not_exist
 
-    assert {:error, :not_found} == Cache.get_pid(key)
+    assert {:error, :not_found} == Cache.get(key)
     assert [] == LoadHistory.loads
     refute PDL.KeyCache.in_cache?(Cache.pdl().key_cache, key)
   end
@@ -162,7 +162,7 @@ defmodule PayDayLoan.Backends.ProcessTest do
 
   test "load failures are ignored (should be handled in callback)" do
     key = Implementation.key_that_will_not_new
-    assert {:error, :failed} == Cache.get_pid(key)
+    assert {:error, :failed} == Cache.get(key)
     # should get cleared from the load state cache
     assert nil == PDL.peek_load_state(Cache.pdl(), key)
   end
@@ -171,7 +171,7 @@ defmodule PayDayLoan.Backends.ProcessTest do
     key = Implementation.key_that_will_not_refresh
 
     # it should load
-    {:ok, pid} = Cache.get_pid(key)
+    {:ok, pid} = Cache.get(key)
 
     Cache.request_load(key)
 
@@ -179,7 +179,7 @@ defmodule PayDayLoan.Backends.ProcessTest do
     wait_for(fn -> !Process.alive?(pid) end)
 
     # fail to refresh
-    assert {:error, :failed} == Cache.get_pid(key)
+    assert {:error, :failed} == Cache.get(key)
     # should get cleared from the load state cache
     assert nil == PDL.peek_load_state(Cache.pdl(), key)
   end
@@ -190,7 +190,7 @@ defmodule PayDayLoan.Backends.ProcessTest do
     tasks = (1..n)
     |> Enum.map(fn(ix) ->
       Task.async(fn ->
-        {:ok, _pid} = Cache.get_pid(ix)
+        {:ok, _pid} = Cache.get(ix)
       end)
     end)
 
@@ -200,7 +200,7 @@ defmodule PayDayLoan.Backends.ProcessTest do
     expect_keys = Enum.to_list(1..n)
     expect_pids = Enum.map(
       expect_keys,
-      fn(key) -> {:ok, pid} = Cache.get_pid(key); pid end
+      fn(key) -> {:ok, pid} = Cache.get(key); pid end
     )
 
     assert MapSet.new(expect_keys) == MapSet.new(Cache.keys)
@@ -208,7 +208,7 @@ defmodule PayDayLoan.Backends.ProcessTest do
 
     expect_map = Enum.reduce(expect_keys, %{},
       fn(k, acc) ->
-        {:ok, pid} = Cache.get_pid(k)
+        {:ok, pid} = Cache.get(k)
         Map.put(acc, k, pid)
       end)
     
@@ -219,22 +219,22 @@ defmodule PayDayLoan.Backends.ProcessTest do
   end
 
   test "when a pid is killed, it is unloaded and can be reloaded" do
-    {:ok, pid1} = Cache.get_pid(1)
+    {:ok, pid1} = Cache.get(1)
 
     assert Process.alive?(pid1)
 
     Agent.stop(pid1)
 
-    assert {:error, :not_found} == PDL.peek_pid(Cache.pdl(), 1)
+    assert {:error, :not_found} == PDL.peek(Cache.pdl(), 1)
 
-    {:ok, pid2} = Cache.get_pid(1)
+    {:ok, pid2} = Cache.get(1)
 
     assert Process.alive?(pid2)
     refute pid1 == pid2
   end
 
   test "when the monitor is killed, it restarts and starts monitoring again" do
-    {:ok, pid1} = Cache.get_pid(1)
+    {:ok, pid1} = Cache.get(1)
 
     previous_pid = Process.whereis(Cache.pdl().cache_monitor)
 
@@ -269,9 +269,9 @@ defmodule PayDayLoan.Backends.ProcessTest do
   end
 
   test "manually removing an element from the cache" do
-    {:ok, pid} = Cache.get_pid(1)
+    {:ok, pid} = Cache.get(1)
 
-    assert {:ok, pid} == Cache.get_pid(1)
+    assert {:ok, pid} == Cache.get(1)
 
     :ok = PayDayLoan.uncache_key(Cache.pdl(), 1)
 
@@ -282,13 +282,13 @@ defmodule PayDayLoan.Backends.ProcessTest do
 
     Agent.stop(pid)
 
-    {:ok, pid2} = Cache.get_pid(1)
+    {:ok, pid2} = Cache.get(1)
     refute pid == pid2
   end
 
   test "when new returns :ignore" do
     key = Implementation.key_that_returns_ignore_on_new
-    assert {:error, :failed} == Cache.get_pid(key)
+    assert {:error, :failed} == Cache.get(key)
     # should get cleared from the load state cache
     assert nil == PDL.peek_load_state(Cache.pdl(), key)
   end
@@ -297,7 +297,7 @@ defmodule PayDayLoan.Backends.ProcessTest do
     key = Implementation.key_that_returns_ignore_on_refresh
 
     # it should load
-    {:ok, pid} = Cache.get_pid(key)
+    {:ok, pid} = Cache.get(key)
 
     Cache.request_load(key)
 
@@ -305,7 +305,7 @@ defmodule PayDayLoan.Backends.ProcessTest do
     wait_for(fn -> !Process.alive?(pid) end)
 
     # fail to refresh
-    assert {:error, :failed} == Cache.get_pid(key)
+    assert {:error, :failed} == Cache.get(key)
     # should get cleared from the load state cache
     assert nil == PDL.peek_load_state(Cache.pdl(), key)
   end
@@ -317,6 +317,6 @@ defmodule PayDayLoan.Backends.ProcessTest do
   end
 
   test "failure callback for processes not found" do
-    assert 1 == Cache.with_pid(1, fn(_) -> 2 end, fn() -> 1 end)
+    assert 1 == Cache.with_value(1, fn(_) -> 2 end, fn() -> 1 end)
   end
 end

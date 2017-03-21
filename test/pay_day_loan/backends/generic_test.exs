@@ -151,7 +151,7 @@ defmodule PayDayLoan.Backends.GenericTest do
   test "requesting a key that is in key cache but fails to load" do
     key = Implementation.key_that_shall_not_be_loaded
 
-    assert {:error, :failed} == Cache.get_pid(key)
+    assert {:error, :failed} == Cache.get(key)
     assert [{:loaded, [key]}] == LoadHistory.loads
     assert nil == PDL.LoadState.peek(Cache.pdl().load_state_manager, key)
     # we hold onto the knowledge that the key exists
@@ -161,7 +161,7 @@ defmodule PayDayLoan.Backends.GenericTest do
   test "requesting a key that does not exist" do
     key = Implementation.key_that_does_not_exist
 
-    assert {:error, :not_found} == Cache.get_pid(key)
+    assert {:error, :not_found} == Cache.get(key)
     assert [] == LoadHistory.loads
     refute PDL.KeyCache.in_cache?(Cache.pdl().key_cache, key)
   end
@@ -179,7 +179,7 @@ defmodule PayDayLoan.Backends.GenericTest do
 
   test "load failures are ignored (should be handled in callback)" do
     key = Implementation.key_that_will_not_new
-    assert {:error, :failed} == Cache.get_pid(key)
+    assert {:error, :failed} == Cache.get(key)
     # should get cleared from the load state cache
     assert nil == PDL.peek_load_state(Cache.pdl(), key)
   end
