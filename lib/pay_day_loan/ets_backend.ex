@@ -7,7 +7,7 @@ defmodule PayDayLoan.EtsBackend do
 
   With pids, special care is taken to keep the cache state consistent with
   the "alive" state of the processes.  If a process is found to be dead, the
-  key is removed from cache.  The `PayDayLoan.CacheMonitor` process monitors
+  key is removed from cache.  The `PayDayLoan.ProcessMonitor` process monitors
   pids, and we check for alive-ness whenever we resolve a value.
 
   If a callback is stored, then the callback is executed whenever we attempt

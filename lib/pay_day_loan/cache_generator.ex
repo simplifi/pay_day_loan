@@ -147,7 +147,7 @@ defmodule PayDayLoan.CacheGenerator do
       end
 
       @doc """
-      Wraps `PayDayLOan.with_pid/4`
+      Wraps `PayDayLoan.with_pid/4`
 
       This is a legacy API method and may be deprecated.  Use `with_value/3`
       """

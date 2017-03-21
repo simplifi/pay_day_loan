@@ -9,7 +9,7 @@ defmodule PayDayLoan.Supervisor do
 
   use Supervisor
 
-  alias PayDayLoan.CacheMonitor
+  alias PayDayLoan.ProcessMonitor
   alias PayDayLoan.LoadState
   alias PayDayLoan.LoadWorker
   alias PayDayLoan.KeyCache
@@ -35,7 +35,7 @@ defmodule PayDayLoan.Supervisor do
 
   defp monitor_worker(%PayDayLoan{cache_monitor: false}), do: nil
   defp monitor_worker(pdl) do
-    worker(CacheMonitor, [pdl, [name: pdl.cache_monitor]])
+    worker(ProcessMonitor, [pdl, [name: pdl.cache_monitor]])
   end
 
   defp load_worker(pdl) do

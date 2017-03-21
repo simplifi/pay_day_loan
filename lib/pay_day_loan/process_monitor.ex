@@ -1,4 +1,4 @@
-defmodule PayDayLoan.CacheMonitor do
+defmodule PayDayLoan.ProcessMonitor do
   @moduledoc """
   Monitor for process registry caches.
 
@@ -16,7 +16,7 @@ defmodule PayDayLoan.CacheMonitor do
     defstruct(pdl: nil, monitors: %{})
     @type t :: %__MODULE__{}
   end
-  alias PayDayLoan.CacheMonitor.State
+  alias PayDayLoan.ProcessMonitor.State
 
   # used by the supervisor
   @doc false
@@ -63,12 +63,7 @@ defmodule PayDayLoan.CacheMonitor do
 
   # make sure we only monitor pids once
   defp ensure_monitored(monitors, pid) do
-    if Map.get(monitors, pid) do
-      monitors
-    else
-      monitor_ref = Process.monitor(pid)
-      Map.put(monitors, pid, monitor_ref)
-    end
+    Map.put_new_lazy(monitors, pid, fn -> Process.monitor(pid) end)
   end
 
   defp remove_monitor(monitors, pid) do
