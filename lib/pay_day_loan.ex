@@ -280,18 +280,6 @@ defmodule PayDayLoan do
   end
 
   @doc """
-  Check for cached pid, but do not request a load
-
-  This is a legacy API method and may be deprecated.  Use `peek/2`.
-  """
-  @spec peek_pid(pdl :: t, key :: PayDayLoan.key)
-  :: {:ok, pid} | {:error, :not_found}
-  def peek_pid(pdl = %PayDayLoan{}, key) do
-    Logger.warn("_pid functions will be deprecated in the next release.")
-    peek(pdl, key)
-  end
-
-  @doc """
   Check for a cached value, but do not request a load
   """
   @spec peek(t, key) :: {:ok, term} | {:error, :not_found}
@@ -328,18 +316,6 @@ defmodule PayDayLoan do
     LoadState.request(pdl.load_state_manager, key_or_keys)
     GenServer.cast(pdl.load_worker, :ping)
     :ok
-  end
-
-  @doc """
-  Synchronously get the pid for a key, attempting to load it if
-  it is not already loaded.
-
-  This is a legacy API method and may be deprecated.  Use `get/2`.
-  """
-  @spec get_pid(pdl :: t, key) :: {:ok, pid} | {:error, error}
-  def get_pid(pdl = %PayDayLoan{}, key) do
-    Logger.warn("_pid functions will be deprecated in the next release.")
-    get(pdl, key)
   end
 
   @doc """
@@ -393,30 +369,6 @@ defmodule PayDayLoan do
   def reduce(pdl = %PayDayLoan{}, acc0, reducer)
   when is_function(reducer, 2) do
     pdl.backend.reduce(pdl, acc0, reducer)
-  end
-
-  @doc """
-  Execute a callback with a pid if it is found.
-
-  If no pid is found, not_found_callback is executed.  By default,
-  not_found_callback returns `{:error, :not_found}`.
-
-  This is a legacy API method and may be deprecated.  Use `with_value/4`.
-  """
-  @spec with_pid(
-    t,
-    PayDayLoan.key,
-    ((pid) -> term),
-    (() -> term)
-  ) :: term
-  def with_pid(
-        pdl = %PayDayLoan{},
-        key,
-        found_callback,
-        not_found_callback \\ fn -> {:error, :not_found} end
-      ) do
-    Logger.warn("_pid functions will be deprecated in the next release.")
-    with_value(pdl, key, found_callback, not_found_callback)
   end
 
   @doc """

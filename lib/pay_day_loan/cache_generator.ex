@@ -48,17 +48,6 @@ defmodule PayDayLoan.CacheGenerator do
   # there may be a way to do this using import
   defp generate_shortcuts do
     quote location: :keep do
-      @doc """
-      Wraps `PayDayLoan.get_pid/2`
-
-      This is a legacy API method and may be deprecated.  Use `get/1`.
-      """
-      @spec get_pid(key :: PayDayLoan.key) ::
-      {:ok, pid} | {:error, PayDayLoan.error}
-      def get_pid(key) do
-        PayDayLoan.get_pid(pdl(), key)
-      end
-
       @doc "Wraps `PayDayLoan.get/2`"
       @spec get(PayDayLoan.key) :: {:ok, term} | {:error, :not_found}
       def get(key) do
@@ -68,14 +57,6 @@ defmodule PayDayLoan.CacheGenerator do
       @doc "Wraps `PayDayLoan.peek/2`"
       @spec peek(PayDayLoan.key) :: {:ok, term} | {:error, :not_found}
       def peek(key), do: PayDayLoan.peek(pdl(), key)
-
-      @doc """
-      Wraps `PayDayLoan.peek_pid/2`
-
-      This is a legacy API method and may be deprecated.  Use `peek/1`.
-      """
-      @spec peek_pid(PayDayLoan.key) :: {:ok, pid} | {:error, :not_found}
-      def peek_pid(key), do: PayDayLoan.peek_pid(pdl(), key)
 
       @doc "Wraps `PayDayLoan.peek_load_state/2`"
       @spec peek_load_state(PayDayLoan.key) :: nil | PayDayLoan.LoadState.t
@@ -144,24 +125,6 @@ defmodule PayDayLoan.CacheGenerator do
       def reduce(acc0, reducer)
       when is_function(reducer, 2) do
         PayDayLoan.reduce(pdl(), acc0, reducer)
-      end
-
-      @doc """
-      Wraps `PayDayLoan.with_pid/4`
-
-      This is a legacy API method and may be deprecated.  Use `with_value/3`
-      """
-      @spec with_pid(
-        PayDayLoan.key,
-                     ((pid) -> term),
-      (() -> term)
-      ) :: term
-      def with_pid(
-            key,
-            found_callback,
-            not_found_callback \\ fn -> {:error, :not_found} end
-          ) do
-        PayDayLoan.with_pid(pdl(), key, found_callback, not_found_callback)
       end
 
       @doc "Wraps `PayDayLoan.cache/3`"
