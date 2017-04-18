@@ -303,6 +303,9 @@ defmodule MyCache do
 end
 ```
 
+The `PayDayLoan.load_state_stats/1` function returns the count of keys in each
+load state and is also useful for instrumentation.
+
 ## Development & Contributing
 
 The usual Elixir and github contribution workflows apply.  Pull requests are welcome!

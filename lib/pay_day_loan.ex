@@ -328,6 +328,25 @@ defmodule PayDayLoan do
   end
 
   @doc """
+  Returns a map of load states and the number of keys in each state
+
+  Useful for instrumentation
+  """
+  @spec load_state_stats(pdl :: t) :: %{}
+  def load_state_stats(pdl = %PayDayLoan{}) do
+    stats = %{requested: 0, loaded: 0, loading: 0, failed: 0}
+    # this is stepping over the boundary of the PDL - this function could
+    # be added to the PDL library
+    :ets.foldl(
+      fn({_key, status}, stats_acc) ->
+        Map.update(stats_acc, status, 0, fn(c) -> c + 1 end)
+      end,
+      stats,
+      pdl.load_state_manager
+    )
+  end
+
+  @doc """
   Check load state, request load if not loaded or loading
 
   Does not ping the load worker.  A load will not happen until

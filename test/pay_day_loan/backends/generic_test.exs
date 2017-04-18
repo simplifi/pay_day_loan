@@ -104,6 +104,9 @@ defmodule PayDayLoan.Backends.GenericTest do
 
     assert PDL.KeyCache.in_cache?(Cache.pdl().key_cache, key)
     assert [] == CacheLogger.logs
+
+    assert %{requested: 0, loaded: 1, loading: 0, failed: 0} ==
+      Cache.load_state_stats()
   end
 
   test "loading happens in bulk" do
