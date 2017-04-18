@@ -247,7 +247,7 @@ defmodule PayDayLoan.Backends.GenericTest do
     # the deleted key no longer shows up in reduce results
     assert [v2] == Cache.values()
 
-    assert {:error, :not_found} == Cache.get(key)
+    assert {:error, :failed} == Cache.get(key)
     assert nil == PDL.LoadState.peek(Cache.pdl().load_state_manager, key)
     # we hold onto the knowledge that the key exists
     assert PDL.KeyCache.in_cache?(Cache.pdl().key_cache, key)

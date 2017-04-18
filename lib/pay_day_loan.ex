@@ -539,7 +539,6 @@ defmodule PayDayLoan do
         get(pdl, key, peek_load_state(pdl, key), try_num - 1)
       {:ok, value} -> {:ok, value}
     end
-    pdl.backend.get(pdl, key)
   end
   # if the key is loading, just dwell and try again
   defp get(pdl, key, :loading, try_num) do
