@@ -51,6 +51,7 @@ with `peek`, and `with_pid` is replaced with `with_value`.
 * Tries very hard not to use process messaging in the main lookup API
   because that can be a bottleneck.  Uses ETS tables for state management.
 * Encourages bulk queries for cache loading.
+* Provides hooks for instrumentation
   
 ## Example usage: Default backend
 
@@ -265,6 +266,41 @@ end
 #   in its next load cycle - this call does not return until either
 #   the cache is loaded (via new above) or the request times out
 {:ok, value} = MyCache.get(1)
+```
+
+## Logging & Instrumentation
+
+The `use` macro accepts an `event_loggers` option, which should be a list of
+functions that take two arguments.  When certain events occur, each of these
+functions will be called with an event atom and the key requested.  The events
+are
+
+* `:timed_out` - Timed out while loading cache.
+* `:disappeared` - Key was marked as `:loaded` but the backend did not return a value
+* `:failed` - The loader failed to load a value for the key
+* `:cache_miss` - A requested value was not already cached
+* `:no_key` - The loaded says this key does not exist
+
+Example usage:
+
+```elixir
+defmodule CacheEventLogger do
+  require Logger
+
+  def log(event, key) do
+    Logger.debug("Requesting key #{inspect key} caused event #{inspect event}")
+  end
+end
+
+defmodule CacheEventStats do
+  def log(event, key) do
+    # update a statsd counter, etc.
+  end
+end
+
+defmodule MyCache do
+  use PayDayLoan, event_loggers: [&CacheEventLogge.log/2, &CacheEventStats.log/2]
+end
 ```
 
 ## Development & Contributing

@@ -7,16 +7,18 @@ defmodule PayDayLoan.Backends.GenericTest do
 
   alias PayDayLoanTest.Support.LoadHistory
 
-  #our cache for testing
-  defmodule Cache do
-    # we override batch_size here so we can test overrides -
-    #   this is not necessary in general use
-    use(
-      PayDayLoan,
-      batch_size: 10,
-      load_wait_msec: 50,
-      callback_module: PayDayLoan.Backends.GenericTest.Implementation
-    )
+  defmodule CacheLogger do
+    def start_link do
+      Agent.start_link(fn -> [] end, name: __MODULE__)
+    end
+
+    def log(event, key) do
+      Agent.update(__MODULE__, fn(l) -> [{event, key} | l] end)
+    end
+
+    def logs do
+      Agent.get(__MODULE__, &(&1))
+    end
   end
 
   defmodule CacheBackend do
@@ -64,9 +66,24 @@ defmodule PayDayLoan.Backends.GenericTest do
     end
   end
 
+  #our cache for testing
+  defmodule Cache do
+    # we override batch_size here so we can test overrides -
+    #   this is not necessary in general use
+    use(
+      PayDayLoan,
+      batch_size: 10,
+      load_wait_msec: 50,
+      event_loggers: [&CacheLogger.log/2],
+      callback_module: PayDayLoan.Backends.GenericTest.Implementation
+    )
+  end
+
+
   use PayDayLoan.Support.CommonTests, cache: Cache
 
   setup do
+    CacheLogger.start_link()
     CacheBackend.start_link()
     :ok
   end
@@ -86,6 +103,7 @@ defmodule PayDayLoan.Backends.GenericTest do
     assert get_result == PDL.peek(Cache.pdl(), key)
 
     assert PDL.KeyCache.in_cache?(Cache.pdl().key_cache, key)
+    assert [] == CacheLogger.logs
   end
 
   test "loading happens in bulk" do
@@ -109,6 +127,11 @@ defmodule PayDayLoan.Backends.GenericTest do
     |> Enum.each(fn(ix) ->
       assert PDL.KeyCache.in_cache?(Cache.pdl().key_cache, ix)
     end)
+
+    assert n == length(CacheLogger.logs)
+    for ix <- 1..n do
+      assert {:cache_miss, ix} in CacheLogger.logs
+    end
   end
 
   test "refreshing a cache element" do
@@ -146,6 +169,8 @@ defmodule PayDayLoan.Backends.GenericTest do
       refreshes,
       {:refresh, ["V#{replaced_key}", replaced_key, replaced_key]}
     )
+
+    assert [cache_miss: replaced_key, cache_miss: 1] == CacheLogger.logs
   end
 
   test "requesting a key that is in key cache but fails to load" do
@@ -156,6 +181,8 @@ defmodule PayDayLoan.Backends.GenericTest do
     assert nil == PDL.LoadState.peek(Cache.pdl().load_state_manager, key)
     # we hold onto the knowledge that the key exists
     assert PDL.KeyCache.in_cache?(Cache.pdl().key_cache, key)
+
+    assert [failed: key, cache_miss: key] == CacheLogger.logs
   end
 
   test "requesting a key that does not exist" do
@@ -164,6 +191,8 @@ defmodule PayDayLoan.Backends.GenericTest do
     assert {:error, :not_found} == Cache.get(key)
     assert [] == LoadHistory.loads
     refute PDL.KeyCache.in_cache?(Cache.pdl().key_cache, key)
+
+    assert [no_key: key] == CacheLogger.logs
   end
 
   test "large batches don't require an extra ping" do
@@ -182,6 +211,8 @@ defmodule PayDayLoan.Backends.GenericTest do
     assert {:error, :failed} == Cache.get(key)
     # should get cleared from the load state cache
     assert nil == PDL.peek_load_state(Cache.pdl(), key)
+
+    assert [failed: key]
   end
 
   test "refresh failures are ignored (should be handled in callback)" do
@@ -199,6 +230,8 @@ defmodule PayDayLoan.Backends.GenericTest do
     assert {:error, :failed} == Cache.get(key)
     # should get cleared from the load state cache
     assert nil == PDL.peek_load_state(Cache.pdl(), key)
+
+    assert [failed: key, cache_miss: key] == CacheLogger.logs
   end
 
   test "working with key/value lists" do
@@ -251,6 +284,8 @@ defmodule PayDayLoan.Backends.GenericTest do
     assert nil == PDL.LoadState.peek(Cache.pdl().load_state_manager, key)
     # we hold onto the knowledge that the key exists
     assert PDL.KeyCache.in_cache?(Cache.pdl().key_cache, key)
+
+    assert [disappeared: key]
   end
 
   test "when the monitor is killed, it restarts" do
@@ -283,6 +318,8 @@ defmodule PayDayLoan.Backends.GenericTest do
 
     # can't be manually overwritten
     assert {:error, "V42"} == Cache.cache(1, 0)
+
+    assert [] == CacheLogger.logs
   end
 
   test "manually removing an element from the cache" do
@@ -297,6 +334,8 @@ defmodule PayDayLoan.Backends.GenericTest do
 
     # value is still in the backend
     assert {:ok, "V1"} == CacheBackend.get(1)
+
+    assert [cache_miss: 1] == CacheLogger.logs
   end
 
   test "when new returns :ignore" do
@@ -304,6 +343,8 @@ defmodule PayDayLoan.Backends.GenericTest do
     assert {:error, :failed} == Cache.get(key)
     # should get cleared from the load state cache
     assert nil == PDL.peek_load_state(Cache.pdl(), key)
+
+    assert [failed: key, cache_miss: key] == CacheLogger.logs
   end
 
   test "refresh :ignore failures are ignored (should be handled in callback)" do
@@ -321,12 +362,16 @@ defmodule PayDayLoan.Backends.GenericTest do
     assert {:error, :failed} == Cache.get(key)
     # should get cleared from the load state cache
     assert nil == PDL.peek_load_state(Cache.pdl(), key)
+
+    assert [failed: key, cache_miss: key] == CacheLogger.logs
   end
 
   test "when a key fails to load before the timeout" do
     key = Implementation.key_that_loads_too_slowly
 
     assert {:error, :timed_out} == Cache.get(key)
+
+    assert [timed_out: key, cache_miss: key] == CacheLogger.logs
   end
 
   test "working with the load state for lists of keys" do

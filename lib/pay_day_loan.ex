@@ -18,8 +18,35 @@ defmodule PayDayLoan do
     batch_size: nil,
     load_num_tries: nil,
     load_wait_msec: nil,
-    supervisor_name: nil
+    supervisor_name: nil,
+    event_loggers: []
   )
+
+  @typedoc """
+  A key in the cache.
+
+  This could be any Erlang/Elixir `term`.  In practice, for example, it may be
+  an integer representing the primary key in a database table.
+  """
+  @type key :: term
+
+  @typedoc """
+  An event that can happen on cache request.
+
+  * `:timed_out` - Timed out while loading cache.
+  * `:disappeared` - Key was marked as `:loaded` but the backend did not return
+    a value
+  * `:failed` - The loader failed to load a value for the key
+  * `:cache_miss` - A requested value was not already cached
+  * `:no_key` - The loaded says this key does not exist
+  """
+  @type event :: :timed_out | :disappeared | :failed | :cache_miss | :no_key
+
+  @typedoc """
+  A function that takes an `event` and a `key` and performs some logging action.
+  The return value is ignored
+  """
+  @type event_logger :: ((event, key) -> term)
 
   @typedoc """
   Struct encapsulating a PDL cache.
@@ -52,16 +79,9 @@ defmodule PayDayLoan do
     batch_size: pos_integer,
     load_num_tries: pos_integer,
     load_wait_msec: pos_integer,
-    supervisor_name: atom
+    supervisor_name: atom,
+    event_loggers: [event_logger]
   }
-
-  @typedoc """
-  A key in the cache.
-
-  This could be any Erlang/Elixir `term`.  In practice, for example, it may be
-  an integer representing the primary key in a database table.
-  """
-  @type key :: term
 
   @typedoc """
   Datum returned by the load callback corresponding to a single key.
@@ -490,6 +510,7 @@ defmodule PayDayLoan do
       key_cache:           String.to_atom(name <> "_key_cache"),
       load_worker:         String.to_atom(name <> "_load_worker"),
       supervisor_name:     String.to_atom(name <> "_supervisor"),
+      event_loggers:       [],
       batch_size:          @default_batch_size,
       load_num_tries:      @default_load_num_tries,
       load_wait_msec:      @default_load_wait_msec
@@ -526,6 +547,7 @@ defmodule PayDayLoan do
   #   key cache
   defp get(pdl, key, _load_state, 0) do
     KeyCache.remove(pdl.key_cache, key)
+    event_log(pdl, :timed_out, key)
     {:error, :timed_out}
   end
   # if we're already loaded, we just have to grab the pid
@@ -535,6 +557,7 @@ defmodule PayDayLoan do
       # if the value was removed from the backend, we should remove it from
       # the load state and try again
       {:error, :not_found} ->
+        event_log(pdl, :disappeared, key)
         :ok = LoadState.unload(pdl.load_state_manager, key)
         get(pdl, key, peek_load_state(pdl, key), try_num - 1)
       {:ok, value} -> {:ok, value}
@@ -556,6 +579,7 @@ defmodule PayDayLoan do
   # cache load failed
   # return an error and clear the failure so that we can try again
   defp get(pdl, key, :failed, _try_num) do
+    event_log(pdl, :failed, key)
     LoadState.unload(pdl.load_state_manager, key)
     {:error, :failed}
   end
@@ -566,13 +590,21 @@ defmodule PayDayLoan do
     # check if the key even exists in the cache source
     if KeyCache.exist?(pdl.key_cache, pdl.callback_module, key) do
       # we just need to request a load and wait
+      event_log(pdl, :cache_miss, key)
       request_load(pdl, key)
       GenServer.cast(pdl.load_worker, :ping)
       :timer.sleep(pdl.load_wait_msec)
       get(pdl, key, peek_load_state(pdl, key), try_num - 1)
     else
       # if the key doesn't exist in cache source, we can immediately return
+      event_log(pdl, :no_key, key)
       {:error, :not_found}
     end
+  end
+
+  defp event_log(pdl, event, key) do
+    Enum.each(pdl.event_loggers, fn(logger) ->
+      logger.(event, key)
+    end)
   end
 end
