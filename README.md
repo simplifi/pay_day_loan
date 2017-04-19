@@ -37,7 +37,7 @@ however, implement your own backend using the `PayDayLoan.Backend` behaviour.
 This is useful for using an external service (e.g., Redis) as a cache backend.
 See the examples below.
 
-**NOTE** `_pid` functions (e.g., `PayDayLoan.get_pid/2`) are are deprecated and
+**NOTE** `_pid` functions (e.g., `PayDayLoan.get_pid/2`) are deprecated and
 have been removed.  These functions can be replaced with their non-`_pid`
 equivalents.  `get_pid` is replaced with `get`, `peek_pid` is replaced
 with `peek`, and `with_pid` is replaced with `with_value`.  0.3.0 was the last
