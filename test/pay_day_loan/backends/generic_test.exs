@@ -215,7 +215,7 @@ defmodule PayDayLoan.Backends.GenericTest do
     # should get cleared from the load state cache
     assert nil == PDL.peek_load_state(Cache.pdl(), key)
 
-    assert [failed: key]
+    assert [failed: key, cache_miss: key] == CacheLogger.logs
   end
 
   test "refresh failures are ignored (should be handled in callback)" do
@@ -288,7 +288,14 @@ defmodule PayDayLoan.Backends.GenericTest do
     # we hold onto the knowledge that the key exists
     assert PDL.KeyCache.in_cache?(Cache.pdl().key_cache, key)
 
-    assert [disappeared: key]
+    expect_logs = [
+      failed: key,
+      cache_miss: key,
+      disappeared: key,
+      cache_miss: 2,
+      cache_miss: key
+    ]
+    assert expect_logs == CacheLogger.logs
   end
 
   test "when the monitor is killed, it restarts" do
