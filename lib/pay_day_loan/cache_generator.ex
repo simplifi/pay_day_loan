@@ -64,11 +64,11 @@ defmodule PayDayLoan.CacheGenerator do
 
       @doc """
       Returns a map of load states and the number of keys in each state
-    
+
       Useful for instrumentation
       """
       @spec load_state_stats() :: %{}
-      def load_state_stats(), do: PayDayLoan.load_state_stats(pdl())
+      def load_state_stats, do: PayDayLoan.load_state_stats(pdl())
 
       @doc "Wraps `PayDayLoan.query_load_state/2`"
       @spec query_load_state(PayDayLoan.key) :: PayDayLoan.LoadState.t
