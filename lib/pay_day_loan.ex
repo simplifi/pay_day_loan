@@ -350,7 +350,7 @@ defmodule PayDayLoan do
   """
   @spec request_load(pdl :: t, key | [key]) :: :ok
   def request_load(pdl = %PayDayLoan{}, key_or_keys) do
-    LoadState.request(pdl.load_state_manager, key_or_keys)
+    LoadState.request_or_reload(pdl.load_state_manager, key_or_keys)
     GenServer.cast(pdl.load_worker, :ping)
     :ok
   end
@@ -521,7 +521,7 @@ defmodule PayDayLoan do
   end
   # if we're already loaded, we just have to grab the pid
   #    this is hopefully the most common path
-  defp get(pdl, key, :loaded, try_num) do
+  defp get(pdl, key, load_state, try_num) when load_state in [:loaded, :reload] do
     case pdl.backend.get(pdl, key) do
       # if the value was removed from the backend, we should remove it from
       # the load state and try again

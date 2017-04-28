@@ -311,4 +311,19 @@ defmodule PayDayLoan.Backends.BehaviourTest do
     # should get cleared from the load state cache
     assert nil == PDL.peek_load_state(Cache.pdl(), key)
   end
+
+  test "reloading does not block" do
+    key = Implementation.key_that_reloads_slowly
+
+    {:ok, v} = Cache.get(key)
+
+    Cache.request_load(key)
+    # if we call this immediately, we should get the old value
+    assert {:ok, v} == Cache.get(key)
+
+    Patiently.wait_for!(fn ->
+      {:ok, v_new} = Cache.get(key)
+      v_new != v
+    end)
+  end
 end

@@ -13,11 +13,12 @@ defmodule PayDayLoan.LoadState do
 
   * `:requested` - A load has been requested.  The load worker should
     pick this up and set the state to `:loading`.
+  * `:reload` - A value is available and a reload has been requested.
   * `:loading` - The load worker is in the process of loading this key.
   * `:loaded` - The key is loaded in cache.
   * `:failed` - The key attempted a load or refresh and failed.
   """
-  @type t :: :requested | :loading | :loaded | :failed
+  @type t :: :requested | :reload | :loading | :loaded | :failed
 
   # creates the ETS table
   @doc false
@@ -31,7 +32,8 @@ defmodule PayDayLoan.LoadState do
   end
 
   @doc """
-  Return load state; set to `:requested` if not loaded or loading
+  Set the load state to `:requested` if not loaded or loading,
+  return the load state
   """
   @spec query(atom, PayDayLoan.key | [PayDayLoan.key]) :: t | [t]
   def query(ets_table_id, keys) when is_list(keys) do
@@ -70,6 +72,34 @@ defmodule PayDayLoan.LoadState do
   end
   def request(ets_table_id, key) do
     set_status(ets_table_id, key, :requested)
+  end
+
+  @doc """
+  Set the state to `:reload`
+  """
+  @spec reload(atom, PayDayLoan.key | [PayDayLoan.key]) :: :reload | [:reload]
+  def reload(ets_table_id, keys) when is_list(keys) do
+    Enum.map(keys, fn(key) -> reload(ets_table_id, key) end)
+  end
+  def reload(ets_table_id, key) do
+    set_status(ets_table_id, key, :reload)
+  end
+
+  @doc """
+  Set the state to `:reload` if the key is loaded, set it to `:request` if it
+  is not
+  """
+  @spec request_or_reload(atom, PayDayLoan.key | [PayDayLoan.key]) ::
+  :request | :reload | [:request | :reload]
+  def request_or_reload(ets_table_id, keys) when is_list(keys) do
+    Enum.map(keys, fn(key) -> request_or_reload(ets_table_id, key) end)
+  end
+  def request_or_reload(ets_table_id, key) do
+    if peek(ets_table_id, key) == :loaded do
+      reload(ets_table_id, key)
+    else
+      request(ets_table_id, key)
+    end
   end
 
   @doc """
@@ -121,12 +151,17 @@ defmodule PayDayLoan.LoadState do
   end
 
   @doc """
-  Returns true if any keys are in the `:requested` state
+  Returns true if any keys are in the `:requested` or `:reload` states
   """
   @spec any_requested?(atom) :: boolean
   def any_requested?(ets_table_id) do
-    match = :ets.match(ets_table_id, {:"$1", :requested}, 1)
-    case match do
+    # :ets.fun2ms(fn({_, :loaded}) -> true; ({_, :loading}) -> true end)
+    match_spec = [
+      {{:_, :requested}, [], [true]},
+      {{:_, :reload}, [], [true]}
+    ]
+
+    case :ets.select(ets_table_id, match_spec, 1) do
       {[[]], _} -> false
       :"$end_of_table" -> false
       _any_other_result -> true
@@ -134,11 +169,19 @@ defmodule PayDayLoan.LoadState do
   end
 
   @doc """
-  Return the list of requested keys
+  Return the list of requested keys, limited to `limit` elements
   """
-  @spec requested_keys(atom) :: [PayDayLoan.key]
-  def requested_keys(ets_table_id) do
-    List.flatten(:ets.match(ets_table_id, {:"$1", :requested}))
+  @spec requested_keys(atom, pos_integer) :: [PayDayLoan.key]
+  def requested_keys(ets_table_id, limit) do
+    keys_in_state(ets_table_id, :requested, limit)
+  end
+
+  @doc """
+  Return the list of keys in the `:reload` state, limited to `limit` elements
+  """
+  @spec reload_keys(atom, pos_integer) :: [PayDayLoan.key]
+  def reload_keys(ets_table_id, limit) do
+    keys_in_state(ets_table_id, :reload, limit)
   end
 
   @doc """
@@ -152,5 +195,12 @@ defmodule PayDayLoan.LoadState do
   defp set_status(ets_table_id, key, status) do
     true = :ets.insert(ets_table_id, {key, status})
     status
+  end
+
+  defp keys_in_state(ets_table_id, state, limit) do
+    case :ets.match(ets_table_id, {:"$1", state}, limit) do
+      :"$end_of_table" -> []
+      {keys, _continuation} -> List.flatten(keys)
+    end
   end
 end

@@ -8,6 +8,7 @@ defmodule PayDayLoan.Support.TestImplementation do
 
       @key_that_shall_be_replaced "key that shall be replaced" 
       @key_that_loads_too_slowly "key that loads too slowly"
+      @key_that_reloads_slowly "key that reloads slowly"
       @key_that_does_not_exist "key that does not exist"
       @key_that_will_not_new "key that will not new"
       @key_that_will_not_refresh "key that will not refresh"
@@ -28,6 +29,11 @@ defmodule PayDayLoan.Support.TestImplementation do
       # this one will take too long to load
       def key_that_loads_too_slowly do
         @key_that_loads_too_slowly
+      end
+
+      # this key takes more than one cycle to refresh but does not time out
+      def  key_that_reloads_slowly do
+        @key_that_reloads_slowly
       end
 
       # this one will fail the key cache check
@@ -113,6 +119,11 @@ defmodule PayDayLoan.Support.TestImplementation do
       def refresh(old_value, key = @key_that_shall_be_replaced, value) do
         LoadHistory.refresh(old_value, key, value)
         # replace existing value
+        on_replace(old_value, key, value)
+      end
+      def refresh(old_value, key = @key_that_reloads_slowly, value) do
+        LoadHistory.refresh(old_value, key, value)
+        :timer.sleep(100)
         on_replace(old_value, key, value)
       end
       def refresh(old_value, key, value) do

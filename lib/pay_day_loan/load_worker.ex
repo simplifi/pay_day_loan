@@ -46,14 +46,28 @@ defmodule PayDayLoan.LoadWorker do
 
   defp do_load(_pdl, false), do: :ok
   defp do_load(pdl, true) do
-    requested_keys = LoadState.requested_keys(pdl.load_state_manager)
-    {batch_keys, _rest} = Enum.split(requested_keys, pdl.batch_size)
+    batch_keys = get_batch_keys(pdl)
     _ = LoadState.loading(pdl.load_state_manager, batch_keys)
 
     load_batch(pdl, batch_keys)
 
     # loop until no more requested keys
     do_load(pdl, LoadState.any_requested?(pdl.load_state_manager))
+  end
+
+  defp get_batch_keys(pdl) do
+    requested_keys =
+      LoadState.requested_keys(pdl.load_state_manager, pdl.batch_size)
+    num_requested = length(requested_keys)
+    if num_requested < pdl.batch_size do
+      reload_keys = LoadState.reload_keys(
+        pdl.load_state_manager,
+        pdl.batch_size - num_requested
+      )
+      requested_keys ++ reload_keys
+    else
+      requested_keys
+    end
   end
 
   defp load_batch(pdl, batch_keys) do
