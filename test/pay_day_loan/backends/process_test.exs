@@ -323,6 +323,8 @@ defmodule PayDayLoan.Backends.ProcessTest do
       {:ok, v_new} = Cache.get(key)
       v_new != v
     end)
+    assert :loaded == Cache.peek_load_state(key)
+    assert 1 == Cache.size
   end
 
   test "callback_module is a required option for `use PayDayLoan`" do

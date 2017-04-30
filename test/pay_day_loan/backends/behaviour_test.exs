@@ -144,7 +144,7 @@ defmodule PayDayLoan.Backends.BehaviourTest do
 
     wait_for(
       fn ->
-        PDL.LoadState.any_requested?(Cache.pdl().load_state_manager)
+        !PDL.LoadState.any_requested?(Cache.pdl().load_state_manager)
       end
     )
 
@@ -325,5 +325,7 @@ defmodule PayDayLoan.Backends.BehaviourTest do
       {:ok, v_new} = Cache.get(key)
       v_new != v
     end)
+    assert :loaded == Cache.peek_load_state(key)
+    assert 1 == Cache.size
   end
 end

@@ -322,7 +322,14 @@ defmodule PayDayLoan do
   """
   @spec load_state_stats(pdl :: t) :: %{}
   def load_state_stats(pdl = %PayDayLoan{}) do
-    stats = %{requested: 0, loaded: 0, loading: 0, failed: 0}
+    stats = %{
+      requested: 0,
+      loaded: 0,
+      loading: 0,
+      failed: 0,
+      reload: 0,
+      reload_loading: 0
+    }
     :ets.foldl(
       fn({_key, status}, stats_acc) ->
         Map.update(stats_acc, status, 0, fn(c) -> c + 1 end)
@@ -521,7 +528,8 @@ defmodule PayDayLoan do
   end
   # if we're already loaded, we just have to grab the pid
   #    this is hopefully the most common path
-  defp get(pdl, key, load_state, try_num) when load_state in [:loaded, :reload] do
+  defp get(pdl, key, load_state, try_num)
+  when load_state in [:loaded, :reload, :reload_loading] do
     case pdl.backend.get(pdl, key) do
       # if the value was removed from the backend, we should remove it from
       # the load state and try again
@@ -534,6 +542,7 @@ defmodule PayDayLoan do
   end
   # if the key is loading, just dwell and try again
   defp get(pdl, key, :loading, try_num) do
+    event_log(pdl, :blocked, key)
     :timer.sleep(pdl.load_wait_msec)
     get(pdl, key, peek_load_state(pdl, key), try_num - 1)
   end

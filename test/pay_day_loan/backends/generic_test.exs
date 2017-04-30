@@ -97,6 +97,7 @@ defmodule PayDayLoan.Backends.GenericTest do
     assert :requested == PDL.query_load_state(Cache.pdl(), key)
 
     GenServer.cast(Cache.pdl().load_worker, :ping)
+    Patiently.wait_for!(fn -> :loaded == Cache.peek_load_state(key) end)
 
     get_result = Cache.get(key)
     assert :loaded == PDL.query_load_state(Cache.pdl(), key)
@@ -105,8 +106,9 @@ defmodule PayDayLoan.Backends.GenericTest do
     assert PDL.KeyCache.in_cache?(Cache.pdl().key_cache, key)
     assert [] == CacheLogger.logs
 
-    assert %{requested: 0, loaded: 1, loading: 0, failed: 0} ==
-      Cache.load_state_stats()
+    assert %{
+      requested: 0, loaded: 1, loading: 0, failed: 0, reload: 0, reload_loading: 0
+    } == Cache.load_state_stats()
   end
 
   test "loading happens in bulk" do
@@ -155,7 +157,7 @@ defmodule PayDayLoan.Backends.GenericTest do
 
     wait_for(
       fn ->
-        PDL.LoadState.any_requested?(Cache.pdl().load_state_manager)
+        !PDL.LoadState.any_requested?(Cache.pdl().load_state_manager)
       end
     )
 
@@ -381,7 +383,8 @@ defmodule PayDayLoan.Backends.GenericTest do
 
     assert {:error, :timed_out} == Cache.get(key)
 
-    assert [timed_out: key, cache_miss: key] == CacheLogger.logs
+    assert [timed_out: key, blocked: key, cache_miss: key] ==
+      Enum.uniq(CacheLogger.logs)
   end
 
   test "working with the load state for lists of keys" do

@@ -18,7 +18,8 @@ defmodule PayDayLoan.LoadState do
   * `:loaded` - The key is loaded in cache.
   * `:failed` - The key attempted a load or refresh and failed.
   """
-  @type t :: :requested | :reload | :loading | :loaded | :failed
+  @type t :: :requested | :reload | :loading | :loaded |
+    :failed | :reload_loading
 
   # creates the ETS table
   @doc false
@@ -127,6 +128,18 @@ defmodule PayDayLoan.LoadState do
   end
 
   @doc """
+  Set state to `:loading`
+  """
+  @spec reload_loading(atom, PayDayLoan.key | [PayDayLoan.key]) ::
+    :reload_loading | [:reload_loading]
+  def reload_loading(ets_table_id, keys) when is_list(keys) do
+    Enum.map(keys, fn(key) -> reload_loading(ets_table_id, key) end)
+  end
+  def reload_loading(ets_table_id, key) do
+    set_status(ets_table_id, key, :reload_loading)
+  end
+
+  @doc """
   Set state to `:failed`
   """
   @spec failed(atom, PayDayLoan.key | [PayDayLoan.key]) ::
@@ -172,6 +185,7 @@ defmodule PayDayLoan.LoadState do
   Return the list of requested keys, limited to `limit` elements
   """
   @spec requested_keys(atom, pos_integer) :: [PayDayLoan.key]
+  def requested_keys(_ets_table_id, 0), do: []
   def requested_keys(ets_table_id, limit) do
     keys_in_state(ets_table_id, :requested, limit)
   end
@@ -180,6 +194,7 @@ defmodule PayDayLoan.LoadState do
   Return the list of keys in the `:reload` state, limited to `limit` elements
   """
   @spec reload_keys(atom, pos_integer) :: [PayDayLoan.key]
+  def reload_keys(_ets_table_id, 0), do: []
   def reload_keys(ets_table_id, limit) do
     keys_in_state(ets_table_id, :reload, limit)
   end
