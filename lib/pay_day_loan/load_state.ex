@@ -15,6 +15,8 @@ defmodule PayDayLoan.LoadState do
     pick this up and set the state to `:loading`.
   * `:reload` - A value is available and a reload has been requested.
   * `:loading` - The load worker is in the process of loading this key.
+  * `:reload_loading` - The load worker is in the process of loading this
+     key, but it is already loaded and will not block.
   * `:loaded` - The key is loaded in cache.
   * `:failed` - The key attempted a load or refresh and failed.
   """
@@ -128,7 +130,7 @@ defmodule PayDayLoan.LoadState do
   end
 
   @doc """
-  Set state to `:loading`
+  Set state to `:reload_loading`
   """
   @spec reload_loading(atom, PayDayLoan.key | [PayDayLoan.key]) ::
     :reload_loading | [:reload_loading]
