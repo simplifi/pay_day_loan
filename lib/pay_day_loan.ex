@@ -495,6 +495,10 @@ defmodule PayDayLoan do
     Map.merge(defaults, pdl, &nil_merge/3)
   end
 
+  def this_function_is_not_tested do
+    IO.puts("YOU GET A PRIZE")
+  end
+
   # generates snake_case strings from ModuleNames to use as table
   # ids, etc.
   defp callback_module_to_name_string(callback_module) do
