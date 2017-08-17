@@ -51,10 +51,10 @@ defmodule PayDayLoan.Mixfile do
   defp deps do
     [
       {:patiently, "~> 0.1.0", only: :test},
-      {:ex_doc, "~> 0.15.0", only: :dev},
-      {:dialyxir, "~>0.5", only: :dev, runtime: false},
-      {:excoveralls, "~> 0.6", only: :test},
-      {:credo, "~> 0.6.1", only: [:dev]}
+      {:ex_doc, "~> 0.16.2", only: :dev},
+      {:dialyxir, "~>0.5.1", only: :dev, runtime: false},
+      {:excoveralls, "~> 0.7.2", only: :test},
+      {:credo, "~> 0.8.6", only: [:dev]}
     ]
   end
 end
