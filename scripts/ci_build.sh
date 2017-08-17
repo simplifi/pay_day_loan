@@ -11,3 +11,5 @@ then
 else
   MIX_ENV=test mix test
 fi
+
+mix dialyzer --halt-exit-status
