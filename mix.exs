@@ -16,6 +16,11 @@ defmodule PayDayLoan.Mixfile do
        "coveralls.post": :test,
        "coveralls.html": :test
      ],
+     dialyzer: [
+       plt_add_apps: [],
+       ignore_warnings: ".dialyzer_ignore",
+       flags: [:error_handling, :race_conditions]
+     ],
      elixirc_paths: elixirc_paths(Mix.env),
      docs: [main: "PayDayLoan"],
      deps: deps()]
