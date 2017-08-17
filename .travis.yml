@@ -4,6 +4,8 @@ cache:
   directories:
     - deps
     - _build
+    - ~/.mix
+    - ~/.hex
 
 matrix:
   include:
@@ -16,12 +18,17 @@ matrix:
     - elixir: 1.4.5
       otp_release: 19.2
       env: COVERALLS=false
+    - elixir: 1.4.5
+      otp_release: 20.0
+      env: COVERALLS=false
     - elixir: 1.5.1
       otp_release: 19.2
       env: COVERALLS=false
     - elixir: 1.5.1
       otp_release: 20.0
-      env: COVERALLS=true
+      env:
+        COVERALLS=true
+        DIALYZER=true
 
 script:
   - ./scripts/ci_build.sh

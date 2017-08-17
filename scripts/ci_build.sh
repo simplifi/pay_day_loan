@@ -12,4 +12,7 @@ else
   MIX_ENV=test mix test
 fi
 
-mix dialyzer --halt-exit-status
+if [ "$DIALYZER" == true ]
+then
+  mix dialyzer --halt-exit-status
+fi
