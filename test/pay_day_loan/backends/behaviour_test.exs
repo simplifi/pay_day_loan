@@ -32,7 +32,7 @@ defmodule PayDayLoan.Backends.BehaviourTest do
       Agent.get(__MODULE__, fn(m) -> Enum.reduce(m, acc0, reducer) end)
     end
 
-    def size(_pdl), do: Agent.get(__MODULE__, &Map.size/1) 
+    def size(_pdl), do: Agent.get(__MODULE__, &map_size/1) 
 
     def keys(_pdl), do: Agent.get(__MODULE__, &Map.keys/1)
 

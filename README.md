@@ -217,7 +217,7 @@ defmodule MyCacheBackend do
   end
 
   # with redis this could be a call to DBSIZE
-  def size(pdl), do: Agent.get(pdl.backend_payload, &Map.size/1) 
+  def size(pdl), do: Agent.get(pdl.backend_payload, &map_size/1) 
 
   # with redis this could be a call to the KEYS command
   def keys(pdl), do: Agent.get(pdl.backend_payload, &Map.keys/1)
