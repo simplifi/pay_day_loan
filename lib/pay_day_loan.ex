@@ -237,7 +237,7 @@ defmodule PayDayLoan do
     `{:ok, value}` otherwise.
     """
     @callback get(PayDayLoan.t, PayDayLoan.key)
-    :: {:ok, term} | {:error, :not_found}
+    :: {:ok, term} | {:error, PayDayLoan.error}
 
     @doc """
     Insert a value into the cache
