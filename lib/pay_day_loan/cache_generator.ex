@@ -49,7 +49,7 @@ defmodule PayDayLoan.CacheGenerator do
   defp generate_shortcuts do
     quote location: :keep do
       @doc "Wraps `PayDayLoan.get/2`"
-      @spec get(PayDayLoan.key) :: {:ok, term} | {:error, :not_found}
+      @spec get(PayDayLoan.key) :: {:ok, term} | {:error, PayDayLoan.error}
       def get(key) do
         PayDayLoan.get(pdl(), key)
       end
