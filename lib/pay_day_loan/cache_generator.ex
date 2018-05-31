@@ -38,6 +38,8 @@ defmodule PayDayLoan.CacheGenerator do
       @doc "Alias of pay_day_loan/0"
       @spec pdl :: PayDayLoan.t
       defdelegate pdl, to: __MODULE__, as: :pay_day_loan
+
+      defoverridable [pay_day_loan: 0]
     end
   end
 
