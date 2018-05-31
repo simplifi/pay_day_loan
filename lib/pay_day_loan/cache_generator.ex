@@ -39,7 +39,7 @@ defmodule PayDayLoan.CacheGenerator do
       @spec pdl :: PayDayLoan.t
       defdelegate pdl, to: __MODULE__, as: :pay_day_loan
 
-      defoverridable [pdl: 0]
+      defoverridable [pay_day_loan: 0]
     end
   end
 
