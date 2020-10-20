@@ -32,17 +32,17 @@ defmodule PayDayLoan.Supervisor do
         &(&1 == nil)
       )
 
-    supervise(children, strategy: :one_for_one)
+    Supervisor.init(children, strategy: :one_for_one)
   end
 
   defp monitor_worker(%PayDayLoan{cache_monitor: false}), do: nil
 
   defp monitor_worker(pdl) do
-    worker(ProcessMonitor, [pdl, [name: pdl.cache_monitor]])
+    {ProcessMonitor, {pdl, [name: pdl.cache_monitor]}}
   end
 
   defp load_worker(pdl) do
-    worker(LoadWorker, [pdl, [name: pdl.load_worker]])
+    {LoadWorker, {pdl, [name: pdl.load_worker]}}
   end
 
   defp setup(pdl = %PayDayLoan{}) do

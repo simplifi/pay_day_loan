@@ -21,8 +21,8 @@ defmodule PayDayLoan.ProcessMonitor do
 
   # used by the supervisor
   @doc false
-  @spec start_link(PayDayLoan.t(), GenServer.options()) :: GenServer.on_start()
-  def start_link(pdl = %PayDayLoan{}, gen_server_opts \\ []) do
+  @spec start_link({PayDayLoan.t, GenServer.options}) :: GenServer.on_start
+  def start_link({pdl = %PayDayLoan{}, gen_server_opts}) do
     GenServer.start_link(__MODULE__, [pdl], gen_server_opts)
   end
 

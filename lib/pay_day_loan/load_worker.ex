@@ -21,8 +21,8 @@ defmodule PayDayLoan.LoadWorker do
   use GenServer
 
   @doc "Start in a supervision tree"
-  @spec start_link(PayDayLoan.t(), GenServer.options()) :: GenServer.on_start()
-  def start_link(init_state = %PayDayLoan{}, gen_server_opts \\ []) do
+  @spec start_link({PayDayLoan.t, GenServer.options}) :: GenServer.on_start
+  def start_link({init_state = %PayDayLoan{}, gen_server_opts}) do
     GenServer.start_link(__MODULE__, [init_state], gen_server_opts)
   end
 
