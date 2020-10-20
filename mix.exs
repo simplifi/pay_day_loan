@@ -2,28 +2,30 @@ defmodule PayDayLoan.Mixfile do
   use Mix.Project
 
   def project do
-    [app: :pay_day_loan,
-     version: "0.5.3",
-     description: description(),
-     package: package(),
-     elixir: "~> 1.3",
-     build_embedded: Mix.env == :prod,
-     start_permanent: Mix.env == :prod,
-     test_coverage: [tool: ExCoveralls],
-     preferred_cli_env: [
-       "coveralls": :test,
-       "coveralls.detail": :test,
-       "coveralls.post": :test,
-       "coveralls.html": :test
-     ],
-     dialyzer: [
-       plt_add_apps: [],
-       ignore_warnings: ".dialyzer_ignore",
-       flags: [:error_handling, :race_conditions]
-     ],
-     elixirc_paths: elixirc_paths(Mix.env),
-     docs: [main: "PayDayLoan"],
-     deps: deps()]
+    [
+      app: :pay_day_loan,
+      version: "0.5.3",
+      description: description(),
+      package: package(),
+      elixir: "~> 1.3",
+      build_embedded: Mix.env() == :prod,
+      start_permanent: Mix.env() == :prod,
+      test_coverage: [tool: ExCoveralls],
+      preferred_cli_env: [
+        coveralls: :test,
+        "coveralls.detail": :test,
+        "coveralls.post": :test,
+        "coveralls.html": :test
+      ],
+      dialyzer: [
+        plt_add_apps: [],
+        ignore_warnings: ".dialyzer_ignore",
+        flags: [:error_handling, :race_conditions]
+      ],
+      elixirc_paths: elixirc_paths(Mix.env()),
+      docs: [main: "PayDayLoan"],
+      deps: deps()
+    ]
   end
 
   def application do

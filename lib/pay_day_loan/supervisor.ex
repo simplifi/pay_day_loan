@@ -15,25 +15,28 @@ defmodule PayDayLoan.Supervisor do
   alias PayDayLoan.KeyCache
 
   @doc "Start in a supervision tree"
-  @spec start_link(PayDayLoan.t) :: Supervisor.on_start
+  @spec start_link(PayDayLoan.t()) :: Supervisor.on_start()
   def start_link(pdl = %PayDayLoan{}) do
     Supervisor.start_link(__MODULE__, [pdl], name: pdl.supervisor_name)
   end
 
   # Supervisor callback
-  @spec init([PayDayLoan.t]) ::
-  {:ok, {:supervisor.sup_flags, [Supervisor.Spec.spec]}}
+  @spec init([PayDayLoan.t()]) ::
+          {:ok, {:supervisor.sup_flags(), [Supervisor.Spec.spec()]}}
   def init([pdl]) do
     setup(pdl)
 
-    children = Enum.reject(
-      [monitor_worker(pdl), load_worker(pdl)],
-      &(&1 == nil)
-    )
+    children =
+      Enum.reject(
+        [monitor_worker(pdl), load_worker(pdl)],
+        &(&1 == nil)
+      )
+
     supervise(children, strategy: :one_for_one)
   end
 
   defp monitor_worker(%PayDayLoan{cache_monitor: false}), do: nil
+
   defp monitor_worker(pdl) do
     worker(ProcessMonitor, [pdl, [name: pdl.cache_monitor]])
   end

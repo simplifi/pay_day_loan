@@ -10,10 +10,12 @@ defmodule PayDayLoan.KeyCache do
   @doc false
   @spec create_table(atom) :: :ok
   def create_table(table_id) do
-    _ = :ets.new(
-      table_id,
-      [:set, :public, :named_table, {:read_concurrency, true}]
-    )
+    _ =
+      :ets.new(
+        table_id,
+        [:set, :public, :named_table, {:read_concurrency, true}]
+      )
+
     :ok
   end
 
@@ -23,7 +25,7 @@ defmodule PayDayLoan.KeyCache do
   Calls `callback_module.key_exists?(key)` if the key is not
   already in cache.
   """
-  @spec exist?(atom, module, PayDayLoan.key) :: boolean
+  @spec exist?(atom, module, PayDayLoan.key()) :: boolean
   def exist?(table_id, callback_module, key) do
     in_cache?(table_id, key) || lookup?(table_id, callback_module, key)
   end
@@ -31,7 +33,7 @@ defmodule PayDayLoan.KeyCache do
   @doc """
   Returns true if the key is in cache
   """
-  @spec in_cache?(atom, PayDayLoan.key) :: boolean
+  @spec in_cache?(atom, PayDayLoan.key()) :: boolean
   def in_cache?(table_id, key) do
     :ets.member(table_id, key)
   end
@@ -39,7 +41,7 @@ defmodule PayDayLoan.KeyCache do
   @doc """
   Remove a key from the cache
   """
-  @spec remove(atom, PayDayLoan.key) :: :ok
+  @spec remove(atom, PayDayLoan.key()) :: :ok
   def remove(table_id, key) do
     _ = :ets.delete(table_id, key)
     :ok
@@ -49,7 +51,7 @@ defmodule PayDayLoan.KeyCache do
   Calls `callback_module.key_exists?(key)`, adds key to cache if the
   callback returns true
   """
-  @spec lookup?(atom, module, PayDayLoan.key) :: boolean
+  @spec lookup?(atom, module, PayDayLoan.key()) :: boolean
   def lookup?(table_id, callback_module, key) do
     if callback_module.key_exists?(key) do
       add_to_cache(table_id, key)
@@ -61,7 +63,7 @@ defmodule PayDayLoan.KeyCache do
   @doc """
   Add a key to the cache
   """
-  @spec add_to_cache(atom, PayDayLoan.key) :: boolean
+  @spec add_to_cache(atom, PayDayLoan.key()) :: boolean
   def add_to_cache(table_id, key) do
     :ets.insert(table_id, {key, true})
   end

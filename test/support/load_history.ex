@@ -10,6 +10,7 @@ defmodule PayDayLoanTest.Support.LoadHistory do
   end
 
   def loaded([]), do: :ok
+
   def loaded(keys) do
     append({:loaded, keys})
     :ok
@@ -26,7 +27,7 @@ defmodule PayDayLoanTest.Support.LoadHistory do
   end
 
   def get do
-    Agent.get(__MODULE__, fn(x) -> x end)
+    Agent.get(__MODULE__, fn x -> x end)
   end
 
   def bulk_loads do
@@ -50,19 +51,21 @@ defmodule PayDayLoanTest.Support.LoadHistory do
   end
 
   defp append(value) do
-    Agent.update(__MODULE__, fn(so_far) -> so_far ++ [value] end)
+    Agent.update(__MODULE__, fn so_far -> so_far ++ [value] end)
   end
 
   defp is_bulk_load?({:loaded, keys})
-  when is_list(keys) and length(keys) > 1 do
+       when is_list(keys) and length(keys) > 1 do
     true
   end
+
   defp is_bulk_load?(_), do: false
 
   defp is_load?({:loaded, keys})
-  when is_list(keys) and length(keys) > 0 do
+       when is_list(keys) and length(keys) > 0 do
     true
   end
+
   defp is_load?(_), do: false
 
   defp is_new?({:new, _}), do: true
@@ -71,4 +74,3 @@ defmodule PayDayLoanTest.Support.LoadHistory do
   defp is_refresh?({:refresh, _}), do: true
   defp is_refresh?(_), do: false
 end
-
