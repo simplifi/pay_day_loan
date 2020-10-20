@@ -18,6 +18,7 @@ defmodule PayDayLoan do
     batch_size: nil,
     load_num_tries: nil,
     load_wait_msec: nil,
+    load_task_supervisor: nil,
     supervisor_name: nil,
     event_loggers: []
   )
@@ -79,6 +80,7 @@ defmodule PayDayLoan do
           batch_size: pos_integer,
           load_num_tries: pos_integer,
           load_wait_msec: pos_integer,
+          load_task_supervisor: atom,
           supervisor_name: atom,
           event_loggers: [event_logger]
         }
@@ -489,6 +491,7 @@ defmodule PayDayLoan do
       backend: PayDayLoan.EtsBackend,
       key_cache: String.to_atom(name <> "_key_cache"),
       load_worker: String.to_atom(name <> "_load_worker"),
+      load_task_supervisor: String.to_atom(name <> "_load_task_supervisor"),
       supervisor_name: String.to_atom(name <> "_supervisor"),
       event_loggers: [],
       batch_size: @default_batch_size,

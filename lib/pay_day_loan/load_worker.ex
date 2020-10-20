@@ -18,6 +18,11 @@ defmodule PayDayLoan.LoadWorker do
   # how long to wait (msec) after startup before we do the initial load
   @startup_dwell 10
 
+  @type state :: %{
+    pdl: PayDayLoan.t,
+    load_task_ref: nil | reference()
+  }
+
   use GenServer
 
   @doc "Start in a supervision tree"
@@ -26,27 +31,50 @@ defmodule PayDayLoan.LoadWorker do
     GenServer.start_link(__MODULE__, [init_state], gen_server_opts)
   end
 
-  @spec init([PayDayLoan.t()]) :: {:ok, PayDayLoan.t()}
+  @spec init([PayDayLoan.t()]) :: {:ok, state}
   def init([pdl]) do
     Process.send_after(self(), :ping, @startup_dwell)
-    {:ok, pdl}
+    {:ok, %{pdl: pdl, load_task_ref: nil}}
   end
 
-  @spec handle_cast(atom, PayDayLoan.t()) :: {:noreply, PayDayLoan.t()}
-  def handle_cast(:ping, pdl) do
-    :ok = do_load(pdl, LoadState.any_requested?(pdl.load_state_manager))
-    {:noreply, pdl}
+  @spec handle_cast(atom, state) :: {:noreply, state}
+  def handle_cast(:ping, %{pdl: pdl, load_task_ref: nil} = state) do
+    load_task = start_load_task(pdl)
+    {:noreply, %{state | load_task_ref: load_task.ref}}
   end
 
-  @spec handle_info(atom, PayDayLoan.t()) :: {:noreply, PayDayLoan.t()}
-  def handle_info(:ping, pdl) do
-    :ok = do_load(pdl, LoadState.any_requested?(pdl.load_state_manager))
-    {:noreply, pdl}
+  def handle_cast(:ping, %{pdl: _pdl, load_task_ref: ref} = state) when is_reference(ref) do
+    {:noreply, state}
   end
 
-  defp do_load(_pdl, false), do: :ok
+  @spec handle_info(atom, state) :: {:noreply, state}
+  def handle_info(:ping, %{pdl: pdl, load_task_ref: nil} = state) do
+    load_task = start_load_task(pdl)
+    {:noreply, %{state | load_task_ref: load_task.ref}}
+  end
 
-  defp do_load(pdl, true) do
+  def handle_info(:ping, %{pdl: _pdl, load_task_ref: ref} = state) when is_reference(ref) do
+    {:noreply, state}
+  end
+
+  @spec handle_info(tuple, state) :: {:noreply, state}
+  def handle_info({ref, :ok}, state) do
+    Process.demonitor(ref, [:flush])
+    {:noreply, %{state | load_task_ref: nil}}
+  end
+
+  def handle_info({:DOWN, _ref, :process, _pid, reason}, state) do
+    {:noreply, %{state | load_task_ref: nil}}
+  end
+
+  @spec start_load_task(PayDayLoan.t) :: Task.t()
+  defp start_load_task(pdl) do
+    Task.Supervisor.async_nolink(pdl.load_task_supervisor, fn -> do_load(pdl, false) end)
+  end
+
+  defp do_load(_pdl, true), do: :ok
+
+  defp do_load(pdl, false) do
     requested_keys = LoadState.requested_keys(pdl.load_state_manager, pdl.batch_size)
     _ = LoadState.loading(pdl.load_state_manager, requested_keys)
 
@@ -61,7 +89,12 @@ defmodule PayDayLoan.LoadWorker do
     load_batch(pdl, requested_keys ++ reload_keys)
 
     # loop until no more requested keys
-    do_load(pdl, LoadState.any_requested?(pdl.load_state_manager))
+    finished? = length(requested_keys) == 0 && length(reload_keys) == 0
+    do_load(pdl, finished?)
+  end
+
+  defp load_batch(_pdl, batch_keys) when length(batch_keys) == 0 do
+    :ok
   end
 
   defp load_batch(pdl, batch_keys) do

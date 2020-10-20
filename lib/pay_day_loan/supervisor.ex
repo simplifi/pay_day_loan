@@ -28,7 +28,7 @@ defmodule PayDayLoan.Supervisor do
 
     children =
       Enum.reject(
-        [monitor_worker(pdl), load_worker(pdl)],
+        [monitor_worker(pdl), load_worker(pdl), load_task_supervisor(pdl)],
         &(&1 == nil)
       )
 
@@ -43,6 +43,10 @@ defmodule PayDayLoan.Supervisor do
 
   defp load_worker(pdl) do
     {LoadWorker, {pdl, [name: pdl.load_worker]}}
+  end
+
+  defp load_task_supervisor(pdl) do
+    {Task.Supervisor, name: pdl.load_task_supervisor}
   end
 
   defp setup(pdl = %PayDayLoan{}) do
