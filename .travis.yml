@@ -6,6 +6,11 @@ otp_release:
 elixir:
   - 1.10.4
 
+jobs:
+  include:
+    - elixir: 1.9.4
+      otp_release: 22.3
+
 branches:
   only:
     - "master"
