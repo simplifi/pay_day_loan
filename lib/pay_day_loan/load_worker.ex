@@ -32,12 +32,14 @@ defmodule PayDayLoan.LoadWorker do
   end
 
   @spec init([PayDayLoan.t()]) :: {:ok, state}
+  @impl true
   def init([pdl]) do
     Process.send_after(self(), :ping, @startup_dwell)
     {:ok, %{pdl: pdl, load_task_ref: nil}}
   end
 
   @spec handle_cast(atom, state) :: {:noreply, state}
+  @impl true
   def handle_cast(:ping, %{pdl: pdl, load_task_ref: nil} = state) do
     load_task = start_load_task(pdl)
     {:noreply, %{state | load_task_ref: load_task.ref}}
@@ -48,6 +50,7 @@ defmodule PayDayLoan.LoadWorker do
   end
 
   @spec handle_info(atom, state) :: {:noreply, state}
+  @impl true
   def handle_info(:ping, %{pdl: pdl, load_task_ref: nil} = state) do
     load_task = start_load_task(pdl)
     {:noreply, %{state | load_task_ref: load_task.ref}}
@@ -58,12 +61,13 @@ defmodule PayDayLoan.LoadWorker do
   end
 
   @spec handle_info(tuple, state) :: {:noreply, state}
+  @impl true
   def handle_info({ref, :ok}, state) do
     Process.demonitor(ref, [:flush])
     {:noreply, %{state | load_task_ref: nil}}
   end
 
-  def handle_info({:DOWN, _ref, :process, _pid, reason}, state) do
+  def handle_info({:DOWN, _ref, :process, _pid, _reason}, state) do
     {:noreply, %{state | load_task_ref: nil}}
   end
 
