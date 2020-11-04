@@ -20,17 +20,18 @@ defmodule PayDayLoan.LoadState do
   * `:loaded` - The key is loaded in cache.
   * `:failed` - The key attempted a load or refresh and failed.
   """
-  @type t :: :requested | :reload | :loading | :loaded |
-    :failed | :reload_loading
+  @type t :: :requested | :reload | :loading | :loaded | :failed | :reload_loading
 
   # creates the ETS table
   @doc false
   @spec create_table(atom) :: :ok
   def create_table(ets_table_id) do
-    _ = :ets.new(
-      ets_table_id,
-      [:set, :public, :named_table, {:read_concurrency, true}]
-    )
+    _ =
+      :ets.new(
+        ets_table_id,
+        [:set, :public, :named_table, {:read_concurrency, true}]
+      )
+
     :ok
   end
 
@@ -38,14 +39,16 @@ defmodule PayDayLoan.LoadState do
   Set the load state to `:requested` if not loaded or loading,
   return the load state
   """
-  @spec query(atom, PayDayLoan.key | [PayDayLoan.key]) :: t | [t]
+  @spec query(atom, PayDayLoan.key() | [PayDayLoan.key()]) :: t | [t]
   def query(ets_table_id, keys) when is_list(keys) do
-    Enum.map(keys, fn(key) -> query(ets_table_id, key) end)
+    Enum.map(keys, fn key -> query(ets_table_id, key) end)
   end
+
   def query(ets_table_id, key) do
     case :ets.lookup(ets_table_id, key) do
       [] ->
         :requested = request(ets_table_id, key)
+
       [{^key, status}] ->
         status
     end
@@ -54,10 +57,11 @@ defmodule PayDayLoan.LoadState do
   @doc """
   Return load state without modifying; return nil if key is not found
   """
-  @spec peek(atom, PayDayLoan.key | [PayDayLoan.key]) :: t | nil | [t | nil]
+  @spec peek(atom, PayDayLoan.key() | [PayDayLoan.key()]) :: t | nil | [t | nil]
   def peek(ets_table_id, keys) when is_list(keys) do
-    Enum.map(keys, fn(key) -> peek(ets_table_id, key) end)
+    Enum.map(keys, fn key -> peek(ets_table_id, key) end)
   end
+
   def peek(ets_table_id, key) do
     case :ets.lookup(ets_table_id, key) do
       [] -> nil
@@ -68,11 +72,12 @@ defmodule PayDayLoan.LoadState do
   @doc """
   Set state to `:requested`
   """
-  @spec request(atom, PayDayLoan.key | [PayDayLoan.key]) ::
-    :requested | [:requested]
+  @spec request(atom, PayDayLoan.key() | [PayDayLoan.key()]) ::
+          :requested | [:requested]
   def request(ets_table_id, keys) when is_list(keys) do
-    Enum.map(keys, fn(key) -> request(ets_table_id, key) end)
+    Enum.map(keys, fn key -> request(ets_table_id, key) end)
   end
+
   def request(ets_table_id, key) do
     set_status(ets_table_id, key, :requested)
   end
@@ -80,10 +85,11 @@ defmodule PayDayLoan.LoadState do
   @doc """
   Set the state to `:reload`
   """
-  @spec reload(atom, PayDayLoan.key | [PayDayLoan.key]) :: :reload | [:reload]
+  @spec reload(atom, PayDayLoan.key() | [PayDayLoan.key()]) :: :reload | [:reload]
   def reload(ets_table_id, keys) when is_list(keys) do
-    Enum.map(keys, fn(key) -> reload(ets_table_id, key) end)
+    Enum.map(keys, fn key -> reload(ets_table_id, key) end)
   end
+
   def reload(ets_table_id, key) do
     set_status(ets_table_id, key, :reload)
   end
@@ -92,11 +98,12 @@ defmodule PayDayLoan.LoadState do
   Set the state to `:reload` if the key is loaded, set it to `:request` if it
   is not
   """
-  @spec request_or_reload(atom, PayDayLoan.key | [PayDayLoan.key]) ::
-  :request | :reload | [:request | :reload]
+  @spec request_or_reload(atom, PayDayLoan.key() | [PayDayLoan.key()]) ::
+          :request | :reload | [:request | :reload]
   def request_or_reload(ets_table_id, keys) when is_list(keys) do
-    Enum.map(keys, fn(key) -> request_or_reload(ets_table_id, key) end)
+    Enum.map(keys, fn key -> request_or_reload(ets_table_id, key) end)
   end
+
   def request_or_reload(ets_table_id, key) do
     if peek(ets_table_id, key) == :loaded do
       reload(ets_table_id, key)
@@ -108,11 +115,12 @@ defmodule PayDayLoan.LoadState do
   @doc """
   Set state to `:loaded`
   """
-  @spec loaded(atom, PayDayLoan.key | [PayDayLoan.key]) ::
-    :loaded | [:loaded]
+  @spec loaded(atom, PayDayLoan.key() | [PayDayLoan.key()]) ::
+          :loaded | [:loaded]
   def loaded(ets_table_id, keys) when is_list(keys) do
-    Enum.map(keys, fn(key) -> loaded(ets_table_id, key) end)
+    Enum.map(keys, fn key -> loaded(ets_table_id, key) end)
   end
+
   def loaded(ets_table_id, key) do
     set_status(ets_table_id, key, :loaded)
   end
@@ -120,11 +128,12 @@ defmodule PayDayLoan.LoadState do
   @doc """
   Set state to `:loading`
   """
-  @spec loading(atom, PayDayLoan.key | [PayDayLoan.key]) ::
-    :loading | [:loading]
+  @spec loading(atom, PayDayLoan.key() | [PayDayLoan.key()]) ::
+          :loading | [:loading]
   def loading(ets_table_id, keys) when is_list(keys) do
-    Enum.map(keys, fn(key) -> loading(ets_table_id, key) end)
+    Enum.map(keys, fn key -> loading(ets_table_id, key) end)
   end
+
   def loading(ets_table_id, key) do
     set_status(ets_table_id, key, :loading)
   end
@@ -132,11 +141,12 @@ defmodule PayDayLoan.LoadState do
   @doc """
   Set state to `:reload_loading`
   """
-  @spec reload_loading(atom, PayDayLoan.key | [PayDayLoan.key]) ::
-    :reload_loading | [:reload_loading]
+  @spec reload_loading(atom, PayDayLoan.key() | [PayDayLoan.key()]) ::
+          :reload_loading | [:reload_loading]
   def reload_loading(ets_table_id, keys) when is_list(keys) do
-    Enum.map(keys, fn(key) -> reload_loading(ets_table_id, key) end)
+    Enum.map(keys, fn key -> reload_loading(ets_table_id, key) end)
   end
+
   def reload_loading(ets_table_id, key) do
     set_status(ets_table_id, key, :reload_loading)
   end
@@ -144,11 +154,12 @@ defmodule PayDayLoan.LoadState do
   @doc """
   Set state to `:failed`
   """
-  @spec failed(atom, PayDayLoan.key | [PayDayLoan.key]) ::
-    :failed | [:failed]
+  @spec failed(atom, PayDayLoan.key() | [PayDayLoan.key()]) ::
+          :failed | [:failed]
   def failed(ets_table_id, keys) when is_list(keys) do
-    Enum.map(keys, fn(key) -> failed(ets_table_id, key) end)
+    Enum.map(keys, fn key -> failed(ets_table_id, key) end)
   end
+
   def failed(ets_table_id, key) do
     set_status(ets_table_id, key, :failed)
   end
@@ -156,10 +167,11 @@ defmodule PayDayLoan.LoadState do
   @doc """
   Remove a key from the load state table
   """
-  @spec unload(atom, PayDayLoan.key | [PayDayLoan.key]) :: :ok | [:ok]
+  @spec unload(atom, PayDayLoan.key() | [PayDayLoan.key()]) :: :ok | [:ok]
   def unload(ets_table_id, keys) when is_list(keys) do
-    Enum.map(keys, fn(key) -> unload(ets_table_id, key) end)
+    Enum.map(keys, fn key -> unload(ets_table_id, key) end)
   end
+
   def unload(ets_table_id, key) do
     true = :ets.delete(ets_table_id, key)
     :ok
@@ -186,8 +198,9 @@ defmodule PayDayLoan.LoadState do
   @doc """
   Return the list of requested keys, limited to `limit` elements
   """
-  @spec requested_keys(atom, pos_integer) :: [PayDayLoan.key]
+  @spec requested_keys(atom, pos_integer) :: [PayDayLoan.key()]
   def requested_keys(_ets_table_id, 0), do: []
+
   def requested_keys(ets_table_id, limit) do
     keys_in_state(ets_table_id, :requested, limit)
   end
@@ -195,8 +208,9 @@ defmodule PayDayLoan.LoadState do
   @doc """
   Return the list of keys in the `:reload` state, limited to `limit` elements
   """
-  @spec reload_keys(atom, pos_integer) :: [PayDayLoan.key]
+  @spec reload_keys(atom, pos_integer) :: [PayDayLoan.key()]
   def reload_keys(_ets_table_id, 0), do: []
+
   def reload_keys(ets_table_id, limit) do
     keys_in_state(ets_table_id, :reload, limit)
   end
@@ -204,7 +218,7 @@ defmodule PayDayLoan.LoadState do
   @doc """
   Returns all elements of the table
   """
-  @spec all(atom) :: [{PayDayLoan.key, t}]
+  @spec all(atom) :: [{PayDayLoan.key(), t}]
   def all(ets_table_id) do
     List.flatten(:ets.match(ets_table_id, :"$1"))
   end

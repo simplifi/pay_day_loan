@@ -18,6 +18,7 @@ defmodule PayDayLoan do
     batch_size: nil,
     load_num_tries: nil,
     load_wait_msec: nil,
+    load_task_supervisor: nil,
     supervisor_name: nil,
     event_loggers: []
   )
@@ -46,7 +47,7 @@ defmodule PayDayLoan do
   A function that takes an `event` and a `key` and performs some logging action.
   The return value is ignored
   """
-  @type event_logger :: ((event, key) -> term)
+  @type event_logger :: (event, key -> term)
 
   @typedoc """
   Struct encapsulating a PDL cache.
@@ -69,19 +70,20 @@ defmodule PayDayLoan do
   * `supervisor_name` - Registration name for the supervisor.
   """
   @type t :: %PayDayLoan{
-    backend_payload: atom,
-    load_state_manager: atom,
-    cache_monitor: atom | false,
-    backend: atom,
-    key_cache: atom,
-    load_worker: atom,
-    callback_module: module,
-    batch_size: pos_integer,
-    load_num_tries: pos_integer,
-    load_wait_msec: pos_integer,
-    supervisor_name: atom,
-    event_loggers: [event_logger]
-  }
+          backend_payload: atom,
+          load_state_manager: atom,
+          cache_monitor: atom | false,
+          backend: atom,
+          key_cache: atom,
+          load_worker: atom,
+          callback_module: module,
+          batch_size: pos_integer,
+          load_num_tries: pos_integer,
+          load_wait_msec: pos_integer,
+          load_task_supervisor: atom,
+          supervisor_name: atom,
+          event_loggers: [event_logger]
+        }
 
   @typedoc """
   Datum returned by the load callback corresponding to a single key.
@@ -137,8 +139,8 @@ defmodule PayDayLoan do
     Note that there is no requirement that each key passed in
     be represented in the output.
     """
-    @callback bulk_load(keys :: [PayDayLoan.key]) ::
-      [{PayDayLoan.key, PayDayLoan.load_datum}]
+    @callback bulk_load(keys :: [PayDayLoan.key()]) ::
+                [{PayDayLoan.key(), PayDayLoan.load_datum()}]
 
     @doc """
     Create a new cache element before sending it to the backend.
@@ -149,8 +151,8 @@ defmodule PayDayLoan do
     just return `{:ok, load_datum}`.  To signal an error which will cause the
     load to fail for this key, return `{:error, <error payload>}`.
     """
-    @callback new(key :: PayDayLoan.key, load_datum :: PayDayLoan.load_datum) ::
-      {:ok, term} | {:error, term} | :ignore
+    @callback new(key :: PayDayLoan.key(), load_datum :: PayDayLoan.load_datum()) ::
+                {:ok, term} | {:error, term} | :ignore
 
     @doc """
     Update a cache element before storing it.
@@ -171,10 +173,10 @@ defmodule PayDayLoan do
     it is requested again.
     """
     @callback refresh(
-      existing_value :: term,
-      key :: PayDayLoan.key,
-      load_datum :: PayDayLoan.load_datum
-    ) :: {:ok, term} | {:error, term} | :ignore
+                existing_value :: term,
+                key :: PayDayLoan.key(),
+                load_datum :: PayDayLoan.load_datum()
+              ) :: {:ok, term} | {:error, term} | :ignore
 
     @doc """
     Should return true if a key exists in the cache's source.  This should be a
@@ -184,7 +186,7 @@ defmodule PayDayLoan do
     You can stub this method to always return true if you want to effectively
     skip key caching.
     """
-    @callback key_exists?(key :: PayDayLoan.key) :: boolean
+    @callback key_exists?(key :: PayDayLoan.key()) :: boolean
   end
 
   defmodule Backend do
@@ -201,7 +203,7 @@ defmodule PayDayLoan do
     Called during supervisor initialization - use this callback to initialize
     your backend if needed.  Must return `:ok`.
     """
-    @callback setup(PayDayLoan.t) :: :ok
+    @callback setup(PayDayLoan.t()) :: :ok
 
     @doc """
     Should execute a reduce operation over the key/value pairs in the cache.
@@ -211,24 +213,25 @@ defmodule PayDayLoan do
     it should operate as `Enum.reduce/3` would when given a map.
     """
     @callback reduce(
-      PayDayLoan.t,
-      acc0 :: term,
-      reducer :: (({PayDayLoan.key, term}, term) -> term)) ::  term
+                PayDayLoan.t(),
+                acc0 :: term,
+                reducer :: ({PayDayLoan.key(), term}, term -> term)
+              ) :: term
 
     @doc """
     Should return the number of keys in the cache
     """
-    @callback size(PayDayLoan.t) :: non_neg_integer
+    @callback size(PayDayLoan.t()) :: non_neg_integer
 
     @doc """
     Should return a list of keys in the cache
     """
-    @callback keys(PayDayLoan.t) :: [PayDayLoan.key]
+    @callback keys(PayDayLoan.t()) :: [PayDayLoan.key()]
 
     @doc """
     Should return a list of values in the cache
     """
-    @callback values(PayDayLoan.t) :: [term]
+    @callback values(PayDayLoan.t()) :: [term]
 
     @doc """
     Retrieve a value from the cache
@@ -236,22 +239,22 @@ defmodule PayDayLoan do
     Should return `{:error, :not_found}` if the value is not found and
     `{:ok, value}` otherwise.
     """
-    @callback get(PayDayLoan.t, PayDayLoan.key)
-    :: {:ok, term} | {:error, PayDayLoan.error}
+    @callback get(PayDayLoan.t(), PayDayLoan.key()) ::
+                {:ok, term} | {:error, PayDayLoan.error()}
 
     @doc """
     Insert a value into the cache
 
     Must return `:ok`
     """
-    @callback put(PayDayLoan.t, PayDayLoan.key, term) :: :ok
+    @callback put(PayDayLoan.t(), PayDayLoan.key(), term) :: :ok
 
     @doc """
     Delete a key from the cache
 
     Must return `:ok`
     """
-    @callback delete(PayDayLoan.t, PayDayLoan.key) :: :ok
+    @callback delete(PayDayLoan.t(), PayDayLoan.key()) :: :ok
   end
 
   alias PayDayLoan.CacheGenerator
@@ -287,10 +290,11 @@ defmodule PayDayLoan do
   @doc """
   Returns a supervisor specification for the given pdl
   """
-  @spec supervisor_specification(pdl :: PayDayLoan.t) :: Supervisor.Spec.spec
+  @spec supervisor_specification(pdl :: PayDayLoan.t()) :: Supervisor.Spec.spec()
   def supervisor_specification(pdl = %PayDayLoan{}) do
-    pdl = pdl
-    |> merge_defaults
+    pdl =
+      pdl
+      |> merge_defaults
 
     Supervisor.Spec.supervisor(
       PayDayLoan.Supervisor,
@@ -310,7 +314,7 @@ defmodule PayDayLoan do
   @doc """
   Check load state, but do not request a load
   """
-  @spec peek_load_state(pdl :: t, key) :: nil | LoadState.t
+  @spec peek_load_state(pdl :: t, key) :: nil | LoadState.t()
   def peek_load_state(pdl = %PayDayLoan{}, key) do
     LoadState.peek(pdl.load_state_manager, key)
   end
@@ -330,9 +334,10 @@ defmodule PayDayLoan do
       reload: 0,
       reload_loading: 0
     }
+
     :ets.foldl(
-      fn({_key, status}, stats_acc) ->
-        Map.update(stats_acc, status, 0, fn(c) -> c + 1 end)
+      fn {_key, status}, stats_acc ->
+        Map.update(stats_acc, status, 0, fn c -> c + 1 end)
       end,
       stats,
       pdl.load_state_manager
@@ -345,7 +350,7 @@ defmodule PayDayLoan do
   Does not ping the load worker.  A load will not happen until
   the next ping.  Use `request_load/2` to request load and trigger a load ping.
   """
-  @spec query_load_state(pdl :: t, key) :: LoadState.t
+  @spec query_load_state(pdl :: t, key) :: LoadState.t()
   def query_load_state(pdl = %PayDayLoan{}, key) do
     LoadState.query(pdl.load_state_manager, key)
   end
@@ -382,7 +387,7 @@ defmodule PayDayLoan do
   @doc """
   Returns a list of all keys in the given cache
   """
-  @spec keys(pdl :: t) :: [PayDayLoan.key]
+  @spec keys(pdl :: t) :: [PayDayLoan.key()]
   def keys(pdl = %PayDayLoan{}) do
     pdl.backend.keys(pdl)
   end
@@ -407,11 +412,12 @@ defmodule PayDayLoan do
   Perform Enum.reduce/3 over all {key, pid} pairs in the given cache
   """
   @spec reduce(
-    pdl :: t,
-    acc0 :: term,
-    reducer :: (({key, pid}, term) -> term)) :: term
+          pdl :: t,
+          acc0 :: term,
+          reducer :: ({key, pid}, term -> term)
+        ) :: term
   def reduce(pdl = %PayDayLoan{}, acc0, reducer)
-  when is_function(reducer, 2) do
+      when is_function(reducer, 2) do
     pdl.backend.reduce(pdl, acc0, reducer)
   end
 
@@ -421,13 +427,13 @@ defmodule PayDayLoan do
   If no value is found, `not_found_callback` is executed.  By default,
   the `not_found_callback` is a function that returns `{:error, :not_found}`.
   """
-  @spec with_value(t, PayDayLoan.key, ((term) -> term), (() -> term)) :: term
+  @spec with_value(t, PayDayLoan.key(), (term -> term), (() -> term)) :: term
   def with_value(
-    pdl,
-    key,
-    found_callback,
-    not_found_callback \\ fn -> {:error, :not_found} end
-  ) do
+        pdl,
+        key,
+        found_callback,
+        not_found_callback \\ fn -> {:error, :not_found} end
+      ) do
     case peek(pdl, key) do
       {:ok, value} -> found_callback.(value)
       {:error, :not_found} -> not_found_callback.()
@@ -445,11 +451,11 @@ defmodule PayDayLoan do
       key,
       fn
         # found with the same value
-        (^value) -> :ok
+        ^value -> :ok
         # found with a different pid
-        (other_value) -> {:error, other_value}
+        other_value -> {:error, other_value}
       end,
-      fn() ->
+      fn ->
         # not found
         _ = LoadState.loaded(pdl.load_state_manager, key)
         _ = KeyCache.add_to_cache(pdl.key_cache, key)
@@ -475,21 +481,22 @@ defmodule PayDayLoan do
   @doc false
   @spec merge_defaults(t) :: t
   def merge_defaults(pdl = %PayDayLoan{callback_module: callback_module})
-  when not is_nil(callback_module) do
+      when not is_nil(callback_module) do
     name = callback_module_to_name_string(callback_module)
 
     defaults = %PayDayLoan{
-      backend_payload:     String.to_atom(name <> "_backend"),
-      load_state_manager:  String.to_atom(name <> "_load_state_manager"),
-      cache_monitor:       String.to_atom(name <> "_cache_monitor"),
-      backend:             PayDayLoan.EtsBackend,
-      key_cache:           String.to_atom(name <> "_key_cache"),
-      load_worker:         String.to_atom(name <> "_load_worker"),
-      supervisor_name:     String.to_atom(name <> "_supervisor"),
-      event_loggers:       [],
-      batch_size:          @default_batch_size,
-      load_num_tries:      @default_load_num_tries,
-      load_wait_msec:      @default_load_wait_msec
+      backend_payload: String.to_atom(name <> "_backend"),
+      load_state_manager: String.to_atom(name <> "_load_state_manager"),
+      cache_monitor: String.to_atom(name <> "_cache_monitor"),
+      backend: PayDayLoan.EtsBackend,
+      key_cache: String.to_atom(name <> "_key_cache"),
+      load_worker: String.to_atom(name <> "_load_worker"),
+      load_task_supervisor: String.to_atom(name <> "_load_task_supervisor"),
+      supervisor_name: String.to_atom(name <> "_supervisor"),
+      event_loggers: [],
+      batch_size: @default_batch_size,
+      load_num_tries: @default_load_num_tries,
+      load_wait_msec: @default_load_wait_msec
     }
 
     Map.merge(defaults, pdl, &nil_merge/3)
@@ -499,7 +506,7 @@ defmodule PayDayLoan do
   # ids, etc.
   defp callback_module_to_name_string(callback_module) do
     callback_module
-    |> Macro.underscore
+    |> Macro.underscore()
     |> String.replace("/", "_")
   end
 
@@ -526,10 +533,11 @@ defmodule PayDayLoan do
     event_log(pdl, :timed_out, key)
     {:error, :timed_out}
   end
+
   # if we're already loaded, we just have to grab the pid
   #    this is hopefully the most common path
   defp get(pdl, key, load_state, try_num)
-  when load_state in [:loaded, :reload, :reload_loading] do
+       when load_state in [:loaded, :reload, :reload_loading] do
     case pdl.backend.get(pdl, key) do
       # if the value was removed from the backend, we should remove it from
       # the load state and try again
@@ -537,15 +545,19 @@ defmodule PayDayLoan do
         event_log(pdl, :disappeared, key)
         :ok = LoadState.unload(pdl.load_state_manager, key)
         get(pdl, key, peek_load_state(pdl, key), try_num - 1)
-      {:ok, value} -> {:ok, value}
+
+      {:ok, value} ->
+        {:ok, value}
     end
   end
+
   # if the key is loading, just dwell and try again
   defp get(pdl, key, :loading, try_num) do
     event_log(pdl, :blocked, key)
     :timer.sleep(pdl.load_wait_msec)
     get(pdl, key, peek_load_state(pdl, key), try_num - 1)
   end
+
   # if the key has been requested but isn't loading,
   # ping the load worker to make sure it knows it has
   # work to do and then dwell and try again
@@ -554,6 +566,7 @@ defmodule PayDayLoan do
     # rest is the same as :loading (don't double decrement try_num)
     get(pdl, key, :loading, try_num)
   end
+
   # cache load failed
   # return an error and clear the failure so that we can try again
   defp get(pdl, key, :failed, _try_num) do
@@ -561,6 +574,7 @@ defmodule PayDayLoan do
     LoadState.unload(pdl.load_state_manager, key)
     {:error, :failed}
   end
+
   # load state doesn't know about this key - i.e.,
   # it has not been requested (at least since the last time
   # it cached out)
@@ -581,7 +595,7 @@ defmodule PayDayLoan do
   end
 
   defp event_log(pdl, event, key) do
-    Enum.each(pdl.event_loggers, fn(logger) ->
+    Enum.each(pdl.event_loggers, fn logger ->
       logger.(event, key)
     end)
   end

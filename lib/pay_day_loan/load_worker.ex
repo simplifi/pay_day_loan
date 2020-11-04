@@ -18,48 +18,87 @@ defmodule PayDayLoan.LoadWorker do
   # how long to wait (msec) after startup before we do the initial load
   @startup_dwell 10
 
+  @type state :: %{
+    pdl: PayDayLoan.t,
+    load_task_ref: nil | reference()
+  }
+
   use GenServer
 
   @doc "Start in a supervision tree"
-  @spec start_link(PayDayLoan.t, GenServer.options) :: GenServer.on_start
-  def start_link(init_state = %PayDayLoan{}, gen_server_opts \\ []) do
+  @spec start_link({PayDayLoan.t, GenServer.options}) :: GenServer.on_start
+  def start_link({init_state = %PayDayLoan{}, gen_server_opts}) do
     GenServer.start_link(__MODULE__, [init_state], gen_server_opts)
   end
 
-  @spec init([PayDayLoan.t]) :: {:ok, PayDayLoan.t}
+  @spec init([PayDayLoan.t()]) :: {:ok, state}
+  @impl true
   def init([pdl]) do
     Process.send_after(self(), :ping, @startup_dwell)
-    {:ok, pdl}
+    {:ok, %{pdl: pdl, load_task_ref: nil}}
   end
 
-  @spec handle_cast(atom, PayDayLoan.t) :: {:noreply, PayDayLoan.t}
-  def handle_cast(:ping, pdl) do
-    :ok = do_load(pdl, LoadState.any_requested?(pdl.load_state_manager))
-    {:noreply, pdl}
+  @spec handle_cast(atom, state) :: {:noreply, state}
+  @impl true
+  def handle_cast(:ping, %{pdl: pdl, load_task_ref: nil} = state) do
+    load_task = start_load_task(pdl)
+    {:noreply, %{state | load_task_ref: load_task.ref}}
   end
 
-  @spec handle_info(atom, PayDayLoan.t) :: {:noreply, PayDayLoan.t}
-  def handle_info(:ping, pdl) do
-    :ok = do_load(pdl, LoadState.any_requested?(pdl.load_state_manager))
-    {:noreply, pdl}
+  def handle_cast(:ping, %{pdl: _pdl, load_task_ref: ref} = state) when is_reference(ref) do
+    {:noreply, state}
   end
 
-  defp do_load(_pdl, false), do: :ok
-  defp do_load(pdl, true) do
-    requested_keys =
-      LoadState.requested_keys(pdl.load_state_manager, pdl.batch_size)
+  @spec handle_info(atom, state) :: {:noreply, state}
+  @impl true
+  def handle_info(:ping, %{pdl: pdl, load_task_ref: nil} = state) do
+    load_task = start_load_task(pdl)
+    {:noreply, %{state | load_task_ref: load_task.ref}}
+  end
+
+  def handle_info(:ping, %{pdl: _pdl, load_task_ref: ref} = state) when is_reference(ref) do
+    {:noreply, state}
+  end
+
+  @spec handle_info(tuple, state) :: {:noreply, state}
+  @impl true
+  def handle_info({ref, :ok}, state) do
+    Process.demonitor(ref, [:flush])
+    {:noreply, %{state | load_task_ref: nil}}
+  end
+
+  def handle_info({:DOWN, _ref, :process, _pid, _reason}, state) do
+    {:noreply, %{state | load_task_ref: nil}}
+  end
+
+  @spec start_load_task(PayDayLoan.t) :: Task.t()
+  defp start_load_task(pdl) do
+    Task.Supervisor.async_nolink(pdl.load_task_supervisor, fn -> do_load(pdl, false) end)
+  end
+
+  defp do_load(_pdl, true), do: :ok
+
+  defp do_load(pdl, false) do
+    requested_keys = LoadState.requested_keys(pdl.load_state_manager, pdl.batch_size)
     _ = LoadState.loading(pdl.load_state_manager, requested_keys)
 
-    reload_keys = LoadState.reload_keys(
-      pdl.load_state_manager,
-      pdl.batch_size - length(requested_keys)
-    )
+    reload_keys =
+      LoadState.reload_keys(
+        pdl.load_state_manager,
+        pdl.batch_size - length(requested_keys)
+      )
+
     _ = LoadState.reload_loading(pdl.load_state_manager, reload_keys)
 
     load_batch(pdl, requested_keys ++ reload_keys)
 
     # loop until no more requested keys
-    do_load(pdl, LoadState.any_requested?(pdl.load_state_manager))
+    finished? = length(requested_keys) == 0 && length(reload_keys) == 0
+    do_load(pdl, finished?)
+  end
+
+  defp load_batch(_pdl, batch_keys) when length(batch_keys) == 0 do
+    :ok
   end
 
   defp load_batch(pdl, batch_keys) do
@@ -69,25 +108,26 @@ defmodule PayDayLoan.LoadWorker do
     # add it to the cache
     #   we need to know which keys did not get handled so that we can
     #   mark them as failed
-    keys_not_loaded = load_data
-    |> Enum.reduce(
-      MapSet.new(batch_keys),
-      fn({key, load_datum}, keys_remaining) ->
-        # load
-        pdl
-        |> load_element(key, load_datum)
-        |> on_load_or_refresh(pdl, key)
+    keys_not_loaded =
+      load_data
+      |> Enum.reduce(
+        MapSet.new(batch_keys),
+        fn {key, load_datum}, keys_remaining ->
+          # load
+          pdl
+          |> load_element(key, load_datum)
+          |> on_load_or_refresh(pdl, key)
 
-        # remove from the set of loading keys
-        MapSet.delete(keys_remaining, key)
-      end
-    )
+          # remove from the set of loading keys
+          MapSet.delete(keys_remaining, key)
+        end
+      )
 
     # mark these keys as failed because we requested them and they did not
     #    get loaded into cache (e.g., the bulk load query did not return data)
     Enum.each(
       keys_not_loaded,
-      fn(key) -> LoadState.failed(pdl.load_state_manager, key) end
+      fn key -> LoadState.failed(pdl.load_state_manager, key) end
     )
   end
 
@@ -96,10 +136,10 @@ defmodule PayDayLoan.LoadWorker do
     PayDayLoan.with_value(
       pdl,
       key,
-      fn(existing_value) ->
+      fn existing_value ->
         pdl.callback_module.refresh(existing_value, key, load_datum)
       end,
-      fn() ->
+      fn ->
         pdl.callback_module.new(key, load_datum)
       end
     )
@@ -111,11 +151,13 @@ defmodule PayDayLoan.LoadWorker do
     _ = KeyCache.add_to_cache(pdl.key_cache, key)
     pdl.backend.put(pdl, key, value)
   end
+
   defp on_load_or_refresh(:ignore, pdl, key) do
     # treat an :ignore the same as a failure to start
     #   - we failed to add this to cache
     on_load_or_refresh({:error, :ignore}, pdl, key)
   end
+
   defp on_load_or_refresh({:error, _}, pdl, key) do
     LoadState.failed(pdl.load_state_manager, key)
     # NOTE the callback should handle failures - we don't need to

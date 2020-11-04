@@ -16,45 +16,47 @@ defmodule PayDayLoan.ProcessMonitor do
     defstruct(pdl: nil, monitors: %{})
     @type t :: %__MODULE__{}
   end
+
   alias PayDayLoan.ProcessMonitor.State
 
   # used by the supervisor
   @doc false
-  @spec start_link(PayDayLoan.t, GenServer.options) :: GenServer.on_start
-  def start_link(pdl = %PayDayLoan{}, gen_server_opts \\ []) do
+  @spec start_link({PayDayLoan.t, GenServer.options}) :: GenServer.on_start
+  def start_link({pdl = %PayDayLoan{}, gen_server_opts}) do
     GenServer.start_link(__MODULE__, [pdl], gen_server_opts)
   end
 
   ######################################################################
   # GenServer callbacks
-  @spec init([PayDayLoan.t]) :: {:ok, State.t}
+  @spec init([PayDayLoan.t()]) :: {:ok, State.t()}
   def init([pdl]) do
     # monitor all existing pids, clean up if they have died
     #   (could happen when this process restarts)
-    monitors = Enum.reduce(pdl.backend.values(pdl), %{},
-      fn
-        ({_k, pid}, acc) when is_pid(pid) ->
+    monitors =
+      Enum.reduce(pdl.backend.values(pdl), %{}, fn
+        {_k, pid}, acc when is_pid(pid) ->
           if Process.alive?(pid) do
             ensure_monitored(acc, pid)
           else
             pdl.backend.delete_value(pdl, pid)
             Map.delete(acc, pid)
           end
-        (_, acc) -> acc
-      end
-    )
+
+        _, acc ->
+          acc
+      end)
 
     {:ok, %State{pdl: pdl, monitors: monitors}}
   end
 
-  @spec handle_cast({:monitor, pid}, State.t) :: {:noreply, State.t}
+  @spec handle_cast({:monitor, pid}, State.t()) :: {:noreply, State.t()}
   def handle_cast({:monitor, pid}, state) do
     monitors = ensure_monitored(state.monitors, pid)
     {:noreply, %{state | monitors: monitors}}
   end
 
-  @spec handle_info({:DOWN, term, :process, pid, term}, State.t)
-  :: {:noreply, State.t}
+  @spec handle_info({:DOWN, term, :process, pid, term}, State.t()) ::
+          {:noreply, State.t()}
   def handle_info({:DOWN, _, :process, pid, _}, state = %State{pdl: pdl}) do
     pdl.backend.delete_value(pdl, pid)
     monitors = remove_monitor(state.monitors, pid)
