@@ -107,7 +107,7 @@ defmodule PayDayLoan.Backends.ProcessTest do
     Cache.request_load([1, replaced_key])
 
     wait_for(fn ->
-      !PDL.LoadState.any_requested?(Cache.pdl().load_state_manager)
+      PDL.peek_load_state(Cache.pdl(), 1) == :loaded && PDL.peek_load_state(Cache.pdl(), replaced_key) == :loaded
     end)
 
     assert {:ok, pid1} == Cache.get(1)
