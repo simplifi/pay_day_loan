@@ -290,17 +290,16 @@ defmodule PayDayLoan do
   @doc """
   Returns a supervisor specification for the given pdl
   """
-  @spec supervisor_specification(pdl :: PayDayLoan.t()) :: Supervisor.Spec.spec()
+  @spec supervisor_specification(pdl :: PayDayLoan.t()) :: Supervisor.child_spec()
   def supervisor_specification(pdl = %PayDayLoan{}) do
     pdl =
       pdl
       |> merge_defaults
 
-    Supervisor.Spec.supervisor(
-      PayDayLoan.Supervisor,
-      [pdl],
-      id: pdl.supervisor_name
-    )
+    %{
+      id: pdl.supervisor_name,
+      start: {PayDayLoan.Supervisor, :start_link, [pdl]}
+    }
   end
 
   @doc """
@@ -584,7 +583,6 @@ defmodule PayDayLoan do
       # we just need to request a load and wait
       event_log(pdl, :cache_miss, key)
       request_load(pdl, key)
-      GenServer.cast(pdl.load_worker, :ping)
       :timer.sleep(pdl.load_wait_msec)
       get(pdl, key, peek_load_state(pdl, key), try_num - 1)
     else

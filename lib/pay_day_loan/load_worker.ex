@@ -19,14 +19,14 @@ defmodule PayDayLoan.LoadWorker do
   @startup_dwell 10
 
   @type state :: %{
-    pdl: PayDayLoan.t,
-    load_task_ref: nil | reference()
-  }
+          pdl: PayDayLoan.t(),
+          load_task_ref: nil | reference()
+        }
 
   use GenServer
 
   @doc "Start in a supervision tree"
-  @spec start_link({PayDayLoan.t, GenServer.options}) :: GenServer.on_start
+  @spec start_link({PayDayLoan.t(), GenServer.options()}) :: GenServer.on_start()
   def start_link({init_state = %PayDayLoan{}, gen_server_opts}) do
     GenServer.start_link(__MODULE__, [init_state], gen_server_opts)
   end
@@ -71,7 +71,7 @@ defmodule PayDayLoan.LoadWorker do
     {:noreply, %{state | load_task_ref: nil}}
   end
 
-  @spec start_load_task(PayDayLoan.t) :: Task.t()
+  @spec start_load_task(PayDayLoan.t()) :: Task.t()
   defp start_load_task(pdl) do
     Task.Supervisor.async_nolink(pdl.load_task_supervisor, fn -> do_load(pdl, false) end)
   end
@@ -93,11 +93,11 @@ defmodule PayDayLoan.LoadWorker do
     load_batch(pdl, requested_keys ++ reload_keys)
 
     # loop until no more requested keys
-    finished? = length(requested_keys) == 0 && length(reload_keys) == 0
+    finished? = Enum.empty?(requested_keys) && Enum.empty?(reload_keys)
     do_load(pdl, finished?)
   end
 
-  defp load_batch(_pdl, batch_keys) when length(batch_keys) == 0 do
+  defp load_batch(_pdl, []) do
     :ok
   end
 

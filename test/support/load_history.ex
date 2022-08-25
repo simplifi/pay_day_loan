@@ -61,11 +61,8 @@ defmodule PayDayLoanTest.Support.LoadHistory do
 
   defp is_bulk_load?(_), do: false
 
-  defp is_load?({:loaded, keys})
-       when is_list(keys) and length(keys) > 0 do
-    true
-  end
-
+  defp is_load?({:loaded, []}), do: false
+  defp is_load?({:loaded, keys}) when is_list(keys), do: true
   defp is_load?(_), do: false
 
   defp is_new?({:new, _}), do: true

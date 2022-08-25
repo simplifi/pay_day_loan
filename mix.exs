@@ -4,7 +4,7 @@ defmodule PayDayLoan.Mixfile do
   def project do
     [
       app: :pay_day_loan,
-      version: "0.6.1",
+      version: "0.7.0",
       description: description(),
       package: package(),
       elixir: "~> 1.5",
@@ -20,7 +20,7 @@ defmodule PayDayLoan.Mixfile do
       dialyzer: [
         plt_add_apps: [],
         ignore_warnings: ".dialyzer_ignore",
-        flags: [:error_handling, :race_conditions]
+        flags: [:error_handling]
       ],
       elixirc_paths: elixirc_paths(Mix.env()),
       docs: [main: "PayDayLoan"],
@@ -52,11 +52,11 @@ defmodule PayDayLoan.Mixfile do
 
   defp deps do
     [
-      {:patiently, "~> 0.1.0", only: :test},
-      {:ex_doc, "~> 0.16.2", only: :dev},
-      {:dialyxir, "~>0.5.1", only: :dev, runtime: false},
-      {:excoveralls, "~> 0.7.2", only: :test},
-      {:credo, "~> 0.8.6", only: [:dev]}
+      {:patiently, "~> 0.2", only: :test},
+      {:ex_doc, "~> 0.28", only: :dev},
+      {:dialyxir, "~> 1.2", only: :dev, runtime: false},
+      {:excoveralls, "~> 0.14", only: :test},
+      {:credo, "~> 1.6", only: [:dev]}
     ]
   end
 end
