@@ -80,9 +80,9 @@ defmodule PayDayLoan.Backends.ProcessTest do
     Enum.each(tasks, fn task -> Task.await(task) end)
     assert n == Cache.size()
 
-    assert length(LoadHistory.bulk_loads()) > 0
+    refute Enum.empty?(LoadHistory.bulk_loads())
     assert n == length(LoadHistory.news())
-    assert 0 == length(LoadHistory.refreshes())
+    assert Enum.empty?(LoadHistory.refreshes())
 
     1..n
     |> Enum.each(fn ix ->
@@ -107,7 +107,8 @@ defmodule PayDayLoan.Backends.ProcessTest do
     Cache.request_load([1, replaced_key])
 
     wait_for(fn ->
-      PDL.peek_load_state(Cache.pdl(), 1) == :loaded && PDL.peek_load_state(Cache.pdl(), replaced_key) == :loaded
+      PDL.peek_load_state(Cache.pdl(), 1) == :loaded &&
+        PDL.peek_load_state(Cache.pdl(), replaced_key) == :loaded
     end)
 
     assert {:ok, pid1} == Cache.get(1)

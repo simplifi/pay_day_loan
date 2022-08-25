@@ -3,7 +3,8 @@
 set -ex
 
 mix deps.get
-MIX_ENV=test mix deps.compile
+mix compile --warnings-as-errors
+MIX_ENV=test mix compile
 
 if [ "$COVERALLS" == true ]
 then

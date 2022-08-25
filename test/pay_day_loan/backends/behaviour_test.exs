@@ -117,9 +117,9 @@ defmodule PayDayLoan.Backends.BehaviourTest do
     Enum.each(tasks, fn task -> Task.await(task) end)
     assert n == Cache.size()
 
-    assert length(LoadHistory.bulk_loads()) > 0
+    refute Enum.empty?(LoadHistory.bulk_loads())
     assert n == length(LoadHistory.news())
-    assert 0 == length(LoadHistory.refreshes())
+    assert Enum.empty?(LoadHistory.refreshes())
 
     1..n
     |> Enum.each(fn ix ->
