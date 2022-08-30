@@ -4,7 +4,7 @@ defmodule PayDayLoan.Mixfile do
   def project do
     [
       app: :pay_day_loan,
-      version: "0.7.0",
+      version: "0.7.1",
       description: description(),
       package: package(),
       elixir: "~> 1.7",
