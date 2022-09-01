@@ -79,7 +79,7 @@ defmodule PayDayLoan.CacheGenerator do
       def query_load_state(key), do: PayDayLoan.query_load_state(pdl(), key)
 
       @doc "Wraps `PayDayLoan.supervisor_specification/1`"
-      @spec supervisor_specification() :: Supervisor.Spec.spec()
+      @spec supervisor_specification() :: Supervisor.child_spec()
       def supervisor_specification do
         PayDayLoan.supervisor_specification(pdl())
       end
