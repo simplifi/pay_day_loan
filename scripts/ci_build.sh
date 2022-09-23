@@ -2,7 +2,6 @@
 
 set -ex
 
-mix deps.get
 mix compile --warnings-as-errors
 MIX_ENV=test mix compile
 
@@ -15,5 +14,5 @@ fi
 
 if [ "$DIALYZER" == true ]
 then
-  mix dialyzer --halt-exit-status
+  mix dialyzer
 fi
