@@ -15,5 +15,5 @@ fi
 
 if [ "$DIALYZER" == true ]
 then
-  mix dialyzer --halt-exit-status
+  mix dialyzer
 fi
