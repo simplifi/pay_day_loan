@@ -1,10 +1,15 @@
+unless Kernel.function_exported?(CoMix, :version, 0) do
+  {:ok, _} = Application.ensure_all_started(:hex)
+  Mix.install([{:co_mix, "~> 1.0", runtime: false}])
+end
+
 defmodule PayDayLoan.Mixfile do
   use Mix.Project
 
   def project do
     [
       app: :pay_day_loan,
-      version: "0.7.1",
+      version: CoMix.version(),
       description: description(),
       package: package(),
       elixir: "~> 1.12",

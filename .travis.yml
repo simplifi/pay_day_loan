@@ -24,5 +24,11 @@ cache:
     - ~/.mix
     - ~/.hex
 
+install:
+  - cd
+  - mix do local.rebar --force, local.hex --force
+  - cd -
+  - mix deps.get
+
 script:
   - ./scripts/ci_build.sh
