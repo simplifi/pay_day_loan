@@ -216,6 +216,22 @@ defmodule PayDayLoan.LoadState do
   end
 
   @doc """
+  Return the list of keys in the `:loading` state
+  """
+  @spec loading_keys(atom | :ets.tid()) :: [PayDayLoan.key()]
+  def loading_keys(ets_table_id) do
+    keys_in_state(ets_table_id, :loading)
+  end
+
+  @doc """
+  Return the list of keys in the `:reload_loading` state
+  """
+  @spec reload_loading_keys(atom | :ets.tid()) :: [PayDayLoan.key()]
+  def reload_loading_keys(ets_table_id) do
+    keys_in_state(ets_table_id, :reload_loading)
+  end
+
+  @doc """
   Returns all elements of the table
   """
   @spec all(atom) :: [{PayDayLoan.key(), t}]
@@ -226,6 +242,12 @@ defmodule PayDayLoan.LoadState do
   defp set_status(ets_table_id, key, status) do
     true = :ets.insert(ets_table_id, {key, status})
     status
+  end
+
+  defp keys_in_state(ets_table_id, state) do
+    ets_table_id
+    |> :ets.match({:"$1", state})
+    |> List.flatten()
   end
 
   defp keys_in_state(ets_table_id, state, limit) do

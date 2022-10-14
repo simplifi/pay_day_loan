@@ -15,6 +15,7 @@ defmodule PayDayLoan.Support.TestImplementation do
       @key_that_returns_ignore_on_new "key that returns ignore on new"
       @key_that_returns_ignore_on_refresh "key that returns ignore on refresh"
       @key_that_is_removed_from_backend "key that is removed from backend"
+      @key_that_times_out_during_bulk_load "key that times out during bulk load"
 
       # we'll refuse to load this key
       def key_that_shall_not_be_loaded do
@@ -67,8 +68,19 @@ defmodule PayDayLoan.Support.TestImplementation do
         @key_that_is_removed_from_backend
       end
 
+      # this key causes a timeout crash in the loader itself
+      def key_that_times_out_during_bulk_load do
+        @key_that_times_out_during_bulk_load
+      end
+
       def bulk_load(keys) do
         LoadHistory.loaded(keys)
+
+        if Enum.any?(keys, fn k -> k == key_that_times_out_during_bulk_load() end) do
+          # simulate a typical pattern match error that happens when we get a timeout
+          # during bulk load and don't recover gracefully
+          :ok = :timed_out
+        end
 
         keys =
           keys

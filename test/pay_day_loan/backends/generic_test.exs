@@ -427,4 +427,14 @@ defmodule PayDayLoan.Backends.GenericTest do
              "Function #{inspect(f)} not exported"
     end
   end
+
+  test "requesting a key that causes a timeout crash in the load process" do
+    key = Implementation.key_that_times_out_during_bulk_load()
+
+    assert {:error, :timed_out} == Cache.get(key)
+
+    # The final check is that even after a previous failure, the keys are marked requested
+    # when we try to get them:
+    assert :requested == PDL.query_load_state(Cache.pdl(), key)
+  end
 end
