@@ -21,7 +21,7 @@ defmodule PayDayLoan.Backends.NoRetryTest do
     )
   end
 
-  # loader behaviour implementation
+  # Dummy loader behaviour implementation
   defmodule Implementation do
     use PayDayLoan.Support.TestImplementation
 
@@ -29,7 +29,7 @@ defmodule PayDayLoan.Backends.NoRetryTest do
       {:ok, value}
     end
 
-    def on_remove(key, _value) do
+    def on_remove(_key, _value) do
     end
 
     def on_replace(_old_value, _key, _value) do

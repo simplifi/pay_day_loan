@@ -75,8 +75,6 @@ defmodule PayDayLoan.LoadWorker do
       LoadState.loading_keys(pdl.load_state_manager) ++
         LoadState.reload_loading_keys(pdl.load_state_manager)
 
-    IO.puts("Pending keyes: #{pending_keys}")
-
     LoadState.unload(pdl.load_state_manager, pending_keys)
 
     {:noreply, %{state | load_task_ref: nil}}

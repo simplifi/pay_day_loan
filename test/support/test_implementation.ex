@@ -79,7 +79,7 @@ defmodule PayDayLoan.Support.TestImplementation do
         if Enum.any?(keys, fn k -> k == key_that_times_out_during_bulk_load() end) do
           # simulate a typical pattern match error that happens when we get a timeout
           # during bulk load and don't recover gracefully
-          :ok = :timed_out
+          exit(:timed_out)
         end
 
         keys =
