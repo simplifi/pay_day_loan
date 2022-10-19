@@ -71,11 +71,15 @@ defmodule PayDayLoan.LoadWorker do
     # The loader process died, so reset the status of any keys that were in the :loading
     # or :request_loading states to unloaded.
 
-    pending_keys =
-      LoadState.loading_keys(pdl.load_state_manager) ++
-        LoadState.reload_loading_keys(pdl.load_state_manager)
+    LoadState.unload(
+      pdl.load_state_manager,
+      LoadState.loading_keys(pdl.load_state_manager)
+    )
 
-    LoadState.unload(pdl.load_state_manager, pending_keys)
+    LoadState.unload(
+      pdl.load_state_manager,
+      LoadState.reload_loading_keys(pdl.load_state_manager)
+    )
 
     {:noreply, %{state | load_task_ref: nil}}
   end
