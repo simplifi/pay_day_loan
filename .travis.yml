@@ -32,3 +32,6 @@ install:
 
 script:
   - ./scripts/ci_build.sh
+
+after_success:
+  - .travis/upload.sh
