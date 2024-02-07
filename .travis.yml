@@ -25,9 +25,7 @@ cache:
     - ~/.hex
 
 install:
-  - cd
   - mix do local.rebar --force, local.hex --force
-  - cd -
   - mix deps.get
 
 script:
