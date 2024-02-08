@@ -13,10 +13,6 @@ jobs:
     - elixir: 1.12.3
       otp_release: 24.0
 
-branches:
-  only:
-    - "master"
-
 cache:
   directories:
     - deps
@@ -31,5 +27,10 @@ install:
 script:
   - ./scripts/ci_build.sh
 
-after_success:
-  - .travis/upload.sh
+deploy:
+  skip_cleanup: true
+  provider: script
+  script: mix hex.publish --yes
+  on:
+    tags: true
+    elixir: '1.13.4'
