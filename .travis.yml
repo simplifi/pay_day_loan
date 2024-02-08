@@ -13,10 +13,6 @@ jobs:
     - elixir: 1.12.3
       otp_release: 24.0
 
-branches:
-  only:
-    - "master"
-
 cache:
   directories:
     - deps
