@@ -1,15 +1,10 @@
-unless Kernel.function_exported?(CoMix, :version, 0) do
-  {:ok, _} = Application.ensure_all_started(:hex)
-  Mix.install([{:co_mix, "~> 1.0", runtime: false}])
-end
-
 defmodule PayDayLoan.Mixfile do
   use Mix.Project
 
   def project do
     [
       app: :pay_day_loan,
-      version: CoMix.version(),
+      version: version(),
       description: description(),
       package: package(),
       elixir: "~> 1.12",
@@ -31,6 +26,26 @@ defmodule PayDayLoan.Mixfile do
       docs: [main: "PayDayLoan"],
       deps: deps()
     ]
+  end
+
+  # Auto version stamp, a la CoMix.
+  defp version do
+    case :file.consult("hex_metadata.config") do
+      # Use version from hex_metadata when we're a package
+      {:ok, data} ->
+        {"version", version} = List.keyfind(data, "version", 0)
+        version
+
+      # Otherwise, use git version
+      _ ->
+        case System.cmd("git", ["describe", "--tags"]) do
+          {"v" <> version, 0} ->
+            String.trim(version)
+
+          {tag_or_err, code} ->
+            Mix.raise("Failed to get version from `git describe --tags`. Code #{code}: #{inspect(tag_or_err)}")
+        end
+    end
   end
 
   def application do
